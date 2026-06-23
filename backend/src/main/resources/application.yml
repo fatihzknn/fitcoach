@@ -1,0 +1,55 @@
+spring:
+  application:
+    name: fitcoach-backend
+
+  datasource:
+    # Local defaults match docker-compose; override via env in any real environment.
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/fitcoach}
+    username: ${SPRING_DATASOURCE_USERNAME:fitcoach}
+    password: ${SPRING_DATASOURCE_PASSWORD:fitcoach}
+
+  jpa:
+    hibernate:
+      # Schema is owned by Flyway. Hibernate only validates against it (no entities yet in Phase 1).
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-stacktrace: never
+    include-message: never
+
+app:
+  version: 0.1.0
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  jwt:
+    # Must be at least 32 characters. The default is for LOCAL DEV ONLY — override in
+    # every shared/production environment via APP_JWT_SECRET.
+    secret: ${APP_JWT_SECRET:local-dev-only-change-me-please-32chars-min}
+    expiration-minutes: ${APP_JWT_EXPIRATION_MINUTES:1440}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
