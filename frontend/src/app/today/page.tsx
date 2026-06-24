@@ -2,30 +2,58 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Dumbbell, ChevronRight, AlertTriangle } from "lucide-react";
+import { Dumbbell, ChevronRight, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { api, ApiError, type WorkoutPlanDto, type WorkoutDayDto } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type WorkoutPlanDto,
+  type WorkoutDayDto,
+  type WorkoutSessionDto,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function thisWeekCount(history: WorkoutSessionDto[]) {
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  return history.filter((s) => new Date(s.startedAt).getTime() > weekAgo).length;
+}
 
 export default function TodayPage() {
   const router = useRouter();
   const [name, setName] = React.useState<string | null>(null);
   const [plan, setPlan] = React.useState<WorkoutPlanDto | null>(null);
   const [selectedDay, setSelectedDay] = React.useState<WorkoutDayDto | null>(null);
+  const [history, setHistory] = React.useState<WorkoutSessionDto[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [starting, setStarting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let active = true;
-    Promise.all([api.me(), api.getActivePlan()])
-      .then(([me, activePlan]) => {
+    Promise.all([api.me(), api.getActivePlan(), api.getSessionHistory()])
+      .then(([me, activePlan, sessionHistory]) => {
         if (!active) return;
         setName(me.user.displayName);
         setPlan(activePlan);
-        setSelectedDay(activePlan.days[0] ?? null);
+        setHistory(sessionHistory);
+
+        // Auto-select the next day based on the last completed session
+        const lastDayNumber = sessionHistory[0]?.workoutDay.dayNumber ?? 0;
+        const nextDay =
+          activePlan.days.find((d) => d.dayNumber > lastDayNumber) ??
+          activePlan.days[0] ??
+          null;
+        setSelectedDay(nextDay);
       })
       .catch((err: unknown) => {
         if (!active) return;
@@ -38,7 +66,9 @@ export default function TodayPage() {
       .finally(() => {
         if (active) setLoading(false);
       });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function handleStart() {
@@ -59,6 +89,8 @@ export default function TodayPage() {
   const totalSets = selectedDay
     ? selectedDay.exercises.reduce((s, we) => s + we.sets, 0)
     : 0;
+  const weeklyCount = thisWeekCount(history);
+  const recentSessions = history.slice(0, 3);
 
   return (
     <AppShell>
@@ -83,41 +115,43 @@ export default function TodayPage() {
         {loading && (
           <div className="space-y-4 animate-pulse">
             <div className="h-10 rounded-lg bg-card w-1/2" />
-            <div className="h-48 rounded-2xl bg-card" />
+            <div className="h-64 rounded-2xl bg-card" />
+            <div className="h-24 rounded-2xl bg-card" />
           </div>
         )}
 
         {!loading && plan && selectedDay && (
           <>
-            {/* Plan name */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Your Plan
-                </p>
-                <p className="mt-0.5 font-medium text-foreground">{plan.name}</p>
+            {/* Plan label + day selector */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Your Plan
+                  </p>
+                  <p className="mt-0.5 font-medium text-foreground">{plan.name}</p>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {plan.trainingDaysPerWeek} days/week
+                </span>
               </div>
-              <span className="text-xs text-muted-foreground">
-                {plan.trainingDaysPerWeek} days/week
-              </span>
-            </div>
 
-            {/* Day selector */}
-            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-              {plan.days.map((day) => (
-                <button
-                  key={day.id}
-                  onClick={() => setSelectedDay(day)}
-                  className={cn(
-                    "flex-shrink-0 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
-                    selectedDay.id === day.id
-                      ? "border-primary bg-primary/10 text-foreground"
-                      : "border-border bg-card text-muted-foreground hover:bg-elevated",
-                  )}
-                >
-                  Day {day.dayNumber}
-                </button>
-              ))}
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                {plan.days.map((day) => (
+                  <button
+                    key={day.id}
+                    onClick={() => setSelectedDay(day)}
+                    className={cn(
+                      "flex-shrink-0 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
+                      selectedDay.id === day.id
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border bg-card text-muted-foreground hover:bg-elevated",
+                    )}
+                  >
+                    Day {day.dayNumber}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Today's workout card */}
@@ -133,7 +167,6 @@ export default function TodayPage() {
                   </p>
                 </div>
 
-                {/* Exercise preview */}
                 <div className="space-y-2">
                   {selectedDay.exercises.map((we) => (
                     <div
@@ -160,30 +193,52 @@ export default function TodayPage() {
                   </div>
                 )}
 
-                <Button
-                  className="w-full"
-                  size="lg"
-                  onClick={handleStart}
-                  disabled={starting}
-                >
+                <Button className="w-full" size="lg" onClick={handleStart} disabled={starting}>
                   {starting ? "Starting…" : "Start workout"}
                   {!starting && <ChevronRight className="ml-1 h-4 w-4" />}
                 </Button>
               </CardContent>
             </Card>
 
-            {/* Placeholder for Phase 5 weekly summary */}
+            {/* Weekly stats */}
             <Card>
-              <CardContent className="flex items-center justify-between p-5">
-                <div>
-                  <p className="font-display text-3xl font-bold">—</p>
-                  <p className="text-xs text-muted-foreground">workouts this week</p>
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-sm font-medium text-muted-foreground">This week</p>
+                  <span className="text-xs text-muted-foreground">last 7 days</span>
                 </div>
-                <p className="text-right text-xs text-muted-foreground">
-                  Weekly summary
-                  <br />
-                  arrives in Phase 5
-                </p>
+                <div className="flex items-end gap-2">
+                  <p className="font-display text-4xl font-bold">{weeklyCount}</p>
+                  <p className="mb-1 text-sm text-muted-foreground">
+                    / {plan.trainingDaysPerWeek} workouts
+                  </p>
+                </div>
+
+                {/* Mini history list */}
+                {recentSessions.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {recentSessions.map((s) => (
+                      <div
+                        key={s.id}
+                        className="flex items-center justify-between rounded-lg bg-elevated px-3 py-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0" />
+                          <span className="text-sm">{s.workoutDay.workoutName}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(s.startedAt)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {recentSessions.length === 0 && (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    No sessions yet &mdash; start your first workout above.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </>

@@ -127,6 +127,15 @@ public class WorkoutSessionService {
                 .orElse(List.of());
     }
 
+    @Transactional(readOnly = true)
+    public List<WorkoutSessionDto> getHistory(CurrentUser currentUser) {
+        return sessionRepository
+                .findAllByUserIdAndStatusOrderByStartedAtDesc(currentUser.id(), SessionStatus.COMPLETED)
+                .stream()
+                .map(WorkoutSessionDto::from)
+                .toList();
+    }
+
     private WorkoutSession requireOwnedSession(UUID userId, UUID sessionId) {
         WorkoutSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new NotFoundException("Session not found."));

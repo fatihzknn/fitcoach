@@ -271,4 +271,7 @@ export const api = {
     request<PreviousSetDto[]>(`/api/sessions/previous-sets?exerciseId=${exerciseId}`, {
       auth: true,
     }),
+
+  getSessionHistory: () =>
+    request<WorkoutSessionDto[]>("/api/sessions/history", { auth: true }),
 };

@@ -70,6 +70,12 @@ public class WorkoutSessionController {
                 request != null ? request : new CompleteSessionRequest(null));
     }
 
+    @GetMapping("/history")
+    @Operation(summary = "Get all completed workout sessions for the current user, newest first")
+    public List<WorkoutSessionDto> getHistory(@AuthenticationPrincipal CurrentUser currentUser) {
+        return sessionService.getHistory(currentUser);
+    }
+
     @GetMapping("/previous-sets")
     @Operation(summary = "Get the most recent completed set logs for a specific exercise")
     public List<PreviousSetDto> getPreviousSets(
