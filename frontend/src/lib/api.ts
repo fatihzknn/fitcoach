@@ -169,6 +169,37 @@ export interface PlanOptionsResponse {
   alternative: WorkoutPlanDto;
 }
 
+// ─── Session types ─────────────────────────────────────────────────────────────
+
+export type SessionStatus = "IN_PROGRESS" | "COMPLETED" | "ABANDONED";
+
+export interface SetLogDto {
+  id: string;
+  workoutExerciseId: string;
+  setNumber: number;
+  weightKg: number | null;
+  repsCompleted: number;
+  rirActual: number | null;
+  notes: string | null;
+}
+
+export interface WorkoutSessionDto {
+  id: string;
+  workoutPlanId: string;
+  workoutDay: WorkoutDayDto;
+  status: SessionStatus;
+  startedAt: string;
+  completedAt: string | null;
+  setLogs: SetLogDto[];
+}
+
+export interface PreviousSetDto {
+  setNumber: number;
+  weightKg: number | null;
+  repsCompleted: number;
+  rirActual: number | null;
+}
+
 export const api = {
   baseUrl: API_BASE_URL,
   health: () => request<HealthResponse>("/api/health"),
@@ -208,4 +239,36 @@ export const api = {
 
   getActivePlan: () =>
     request<WorkoutPlanDto>("/api/plan/active", { auth: true }),
+
+  startSession: (workoutDayId: string) =>
+    request<WorkoutSessionDto>("/api/sessions/start", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify({ workoutDayId }),
+    }),
+
+  getActiveSession: () =>
+    request<WorkoutSessionDto>("/api/sessions/active", { auth: true }),
+
+  logSet: (
+    sessionId: string,
+    input: { workoutExerciseId: string; setNumber: number; weightKg: number | null; repsCompleted: number; rirActual: number | null },
+  ) =>
+    request<WorkoutSessionDto>(`/api/sessions/${sessionId}/sets`, {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    }),
+
+  completeSession: (sessionId: string, notes?: string) =>
+    request<WorkoutSessionDto>(`/api/sessions/${sessionId}/complete`, {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify({ notes: notes ?? null }),
+    }),
+
+  getPreviousSets: (exerciseId: string) =>
+    request<PreviousSetDto[]>(`/api/sessions/previous-sets?exerciseId=${exerciseId}`, {
+      auth: true,
+    }),
 };
