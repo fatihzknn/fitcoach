@@ -31,7 +31,20 @@ export default function LoginPage() {
     try {
       const res = await api.login({ email: email.trim(), password });
       session.start(res.token, res.onboardingCompleted);
-      router.replace(res.onboardingCompleted ? "/today" : "/onboarding");
+
+      if (!res.onboardingCompleted) {
+        router.replace("/onboarding");
+        return;
+      }
+
+      // Restore the plan cookie for returning users so they skip plan-selection.
+      try {
+        await api.getActivePlan();
+        session.setPlanSelected();
+        router.replace("/today");
+      } catch {
+        router.replace("/plan-selection");
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
       setLoading(false);
