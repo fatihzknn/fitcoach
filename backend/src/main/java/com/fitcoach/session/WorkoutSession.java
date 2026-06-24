@@ -55,7 +55,7 @@ public class WorkoutSession extends BaseEntity {
     private String notes;
 
     @OneToMany(mappedBy = "workoutSession", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
-    @OrderBy("workoutExercise.orderIndex ASC, setNumber ASC")
+    @OrderBy("setNumber ASC")
     private List<SetLog> setLogs = new ArrayList<>();
 
     protected WorkoutSession() {}
