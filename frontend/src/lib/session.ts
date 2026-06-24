@@ -13,6 +13,7 @@
 
 export const AUTH_COOKIE = "fc_auth";
 export const ONBOARDED_COOKIE = "fc_onboarded";
+export const PLAN_COOKIE = "fc_plan";
 
 const ONE_WEEK_SECONDS = 60 * 60 * 24 * 7;
 
@@ -48,8 +49,12 @@ export const session = {
 
   setOnboarded: () => writeCookie(ONBOARDED_COOKIE, "1"),
 
+  hasPlanSelected: () => readCookie(PLAN_COOKIE) !== null,
+  setPlanSelected: () => writeCookie(PLAN_COOKIE, "1"),
+
   signOut: () => {
     clearCookie(AUTH_COOKIE);
     clearCookie(ONBOARDED_COOKIE);
+    clearCookie(PLAN_COOKIE);
   },
 };

@@ -114,6 +114,61 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return body as T;
 }
 
+// ─── Workout plan types ────────────────────────────────────────────────────────
+
+export type MuscleGroup =
+  | "CHEST" | "BACK" | "SHOULDERS" | "BICEPS" | "TRICEPS"
+  | "QUADS" | "HAMSTRINGS" | "GLUTES" | "CORE" | "CALVES";
+export type MovementPattern = "PUSH" | "PULL" | "HINGE" | "SQUAT" | "ISOLATION";
+export type DifficultyLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+export type PlanOption = "RECOMMENDED" | "ALTERNATIVE";
+
+export interface ExerciseDto {
+  id: string;
+  name: string;
+  primaryMuscleGroup: MuscleGroup;
+  secondaryMuscleGroups: MuscleGroup[];
+  movementPattern: MovementPattern;
+  difficultyLevel: DifficultyLevel;
+  videoUrl: string | null;
+  formCue: string;
+  commonMistake: string;
+  alternatives: ExerciseDto[];
+}
+
+export interface WorkoutExerciseDto {
+  id: string;
+  orderIndex: number;
+  sets: number;
+  repRangeMin: number;
+  repRangeMax: number;
+  rirGuidance: string;
+  restSeconds: number;
+  exercise: ExerciseDto;
+}
+
+export interface WorkoutDayDto {
+  id: string;
+  dayNumber: number;
+  workoutName: string;
+  exercises: WorkoutExerciseDto[];
+}
+
+export interface WorkoutPlanDto {
+  id: string;
+  name: string;
+  goal: MainGoal;
+  trainingDaysPerWeek: number;
+  isActive: boolean;
+  sustainabilityWarning: string | null;
+  days: WorkoutDayDto[];
+}
+
+export interface PlanOptionsResponse {
+  recommended: WorkoutPlanDto;
+  alternative: WorkoutPlanDto;
+}
+
 export const api = {
   baseUrl: API_BASE_URL,
   health: () => request<HealthResponse>("/api/health"),
@@ -140,4 +195,17 @@ export const api = {
     }),
 
   profile: () => request<FitnessProfileDto>("/api/profile", { auth: true }),
+
+  getPlanOptions: () =>
+    request<PlanOptionsResponse>("/api/plan/options", { auth: true }),
+
+  selectPlan: (input: { option: PlanOption }) =>
+    request<WorkoutPlanDto>("/api/plan/select", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    }),
+
+  getActivePlan: () =>
+    request<WorkoutPlanDto>("/api/plan/active", { auth: true }),
 };

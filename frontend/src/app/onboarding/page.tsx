@@ -118,7 +118,7 @@ export default function OnboardingPage() {
     try {
       await api.completeOnboarding(payload);
       session.setOnboarded();
-      router.replace("/today");
+      router.replace("/plan-selection");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save. Please try again.");
       setSubmitting(false);

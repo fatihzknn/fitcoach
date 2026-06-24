@@ -108,3 +108,61 @@ left a detail open and a reasonable assumption was chosen instead of asking.
 - `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`
 - `POST /api/onboarding`, `GET /api/profile`
 - Logout is client-side (clear the token cookie); no server token blacklist in the MVP.
+
+## Phase 3 — Exercise Library & Workout Generation Engine
+
+### Exercise library
+- **18 seeded exercises** in `V3__exercise_and_workout.sql`. The required 12 from the spec
+  plus 6 for meaningful alternatives (Push-up, Assisted Pull-up, Goblet Squat, Overhead
+  Press, Dumbbell Row, Hip Thrust). `videoUrl` is nullable; left null for all seed data —
+  will be populated in a later phase once hosting is decided.
+- **Alternatives are bidirectional** in the seed data (each exercise also has a back-link
+  to its alternatives), consistent with the `@ManyToMany` join table that is not directional
+  at the DB level. Applications that display alternatives should deduplicate if needed.
+- **Self-referential `@ManyToMany`** used on `Exercise.alternatives` rather than a separate
+  `ExerciseAlternative` entity, because no per-link metadata is needed (the link itself is
+  the data). A separate entity would be added if "alternative reason" or "ordering" became
+  requirements.
+
+### Workout plan generation
+- **Pure generation then select-to-save.** `GET /api/plan/options` returns two computed
+  plans without writing to the DB; `POST /api/plan/select` re-computes and saves the chosen
+  one. The double-computation is intentional — it avoids orphaned draft records if users
+  abandon the flow.
+- **Only one active plan per user at a time.** Selecting a new plan deactivates the
+  previous one (soft-deactivate, not delete, to preserve history for Phase 5).
+- **5-day plans show a sustainability warning** in both the DTO and the UI. The warning
+  text is: "5 sessions per week is demanding. Ensure 7–8 hours of sleep and listen to
+  your body." This is a guardrail, not a block — users can still select the 5-day plan.
+- **Goal-tuned rep ranges for Regular + 4-day:** STRENGTH 5–8 / 180s rest; FAT_LOSS
+  12–15 / 60s rest; MUSCLE_GAIN and GENERAL_FITNESS 8–12 / 90s rest.
+- **Workout day storage:** For alternating plans (e.g. Full Body A/B/A), Day 3 is an
+  explicit copy of Day 1 in the DB. This makes the session-by-session plan concrete and
+  avoids ambiguity in Phase 4 when logging by day number.
+- **RIR guidance** ("2-3 RIR", "3 RIR", "4 RIR") rather than RPE chosen because RIR
+  is more immediately actionable for beginners: "leave 2-3 reps in the tank".
+
+### Frontend routing
+- **`fc_plan` cookie** added alongside `fc_auth` and `fc_onboarded`. It is a routing
+  convenience — set client-side after `POST /api/plan/select` succeeds. The source of
+  truth remains the backend `workout_plans` table. If a user clears cookies, they'll be
+  redirected to `/plan-selection` and the page will call `GET /api/plan/active` (via the
+  API) to render their existing plan; selecting again deactivates the old plan first.
+- **Onboarding now redirects to `/plan-selection`** instead of `/today`. `/today` guard
+  extended: requires `fc_auth` + `fc_onboarded` + `fc_plan`.
+
+### Tests — Java 26 + Mockito compatibility
+- Mockito 5's inline mock maker requires JVM agent access which is restricted in Java 26.
+  Fixed by adding `src/test/resources/mockito-extensions/org.mockito.plugins.MockMaker`
+  containing `mock-maker-subclass`. This switches to subclass-based mocking (ByteBuddy
+  subclassing instead of instrumentation). Limitation: cannot mock final classes or static
+  methods — not needed in this codebase.
+- `@WebMvcTest` slice tests load `JwtAuthenticationFilter` via component scan even when
+  security auto-configuration is excluded (because the filter is a `@Component`). Fixed by
+  adding `@MockBean JwtService` to the slice test classes so the filter's dependency is
+  satisfied. The filter is not actually invoked because `addFilters = false`.
+
+### Endpoints added
+- `GET /api/plan/options` — returns `PlanOptionsResponse { recommended, alternative }`
+- `POST /api/plan/select` — body `{ option: "RECOMMENDED" | "ALTERNATIVE" }`, saves plan, returns `WorkoutPlanDto`
+- `GET /api/plan/active` — returns active plan or 404
