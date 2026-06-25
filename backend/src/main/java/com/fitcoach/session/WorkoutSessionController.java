@@ -2,6 +2,7 @@ package com.fitcoach.session;
 
 import com.fitcoach.auth.jwt.CurrentUser;
 import com.fitcoach.session.dto.CompleteSessionRequest;
+import com.fitcoach.session.dto.ExerciseHistoryEntryDto;
 import com.fitcoach.session.dto.LogSetRequest;
 import com.fitcoach.session.dto.PreviousSetDto;
 import com.fitcoach.session.dto.StartSessionRequest;
@@ -82,5 +83,13 @@ public class WorkoutSessionController {
             @AuthenticationPrincipal CurrentUser currentUser,
             @RequestParam UUID exerciseId) {
         return sessionService.getPreviousSets(currentUser, exerciseId);
+    }
+
+    @GetMapping("/exercise-history")
+    @Operation(summary = "Get per-session max weight and rep history for a specific exercise (for progression chart)")
+    public List<ExerciseHistoryEntryDto> getExerciseHistory(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @RequestParam UUID exerciseId) {
+        return sessionService.getExerciseHistory(currentUser, exerciseId);
     }
 }

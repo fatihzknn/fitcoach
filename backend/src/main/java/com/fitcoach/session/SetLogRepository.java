@@ -18,4 +18,14 @@ public interface SetLogRepository extends JpaRepository<SetLog, UUID> {
         """)
     List<SetLog> findRecentByUserAndExercise(@Param("userId") UUID userId,
                                               @Param("exerciseId") UUID exerciseId);
+
+    @Query("""
+        SELECT s FROM SetLog s
+        WHERE s.workoutSession.userId = :userId
+          AND s.workoutExercise.exercise.id = :exerciseId
+          AND s.workoutSession.status = 'COMPLETED'
+        ORDER BY s.workoutSession.startedAt ASC, s.setNumber ASC
+        """)
+    List<SetLog> findAllByUserAndExerciseAsc(@Param("userId") UUID userId,
+                                              @Param("exerciseId") UUID exerciseId);
 }

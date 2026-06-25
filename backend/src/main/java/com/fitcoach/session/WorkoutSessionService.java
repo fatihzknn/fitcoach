@@ -4,6 +4,7 @@ import com.fitcoach.auth.jwt.CurrentUser;
 import com.fitcoach.common.NotFoundException;
 import com.fitcoach.session.domain.SessionStatus;
 import com.fitcoach.session.dto.CompleteSessionRequest;
+import com.fitcoach.session.dto.ExerciseHistoryEntryDto;
 import com.fitcoach.session.dto.LogSetRequest;
 import com.fitcoach.session.dto.PreviousSetDto;
 import com.fitcoach.session.dto.WorkoutSessionDto;
@@ -16,8 +17,14 @@ import com.fitcoach.workout.WorkoutPlanRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.ZoneOffset;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class WorkoutSessionService {
@@ -133,6 +140,38 @@ public class WorkoutSessionService {
                 .findAllByUserIdAndStatusOrderByStartedAtDesc(currentUser.id(), SessionStatus.COMPLETED)
                 .stream()
                 .map(WorkoutSessionDto::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ExerciseHistoryEntryDto> getExerciseHistory(CurrentUser currentUser, UUID exerciseId) {
+        List<SetLog> logs = setLogRepository.findAllByUserAndExerciseAsc(currentUser.id(), exerciseId);
+
+        // Group by session UUID (preserving chronological order via LinkedHashMap)
+        Map<UUID, List<SetLog>> bySession = logs.stream()
+                .collect(Collectors.groupingBy(
+                        s -> s.getWorkoutSession().getId(),
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+
+        return bySession.values().stream()
+                .map(sessionLogs -> {
+                    String date = sessionLogs.get(0).getWorkoutSession()
+                            .getStartedAt().atZone(ZoneOffset.UTC).toLocalDate().toString();
+
+                    Double maxWeight = sessionLogs.stream()
+                            .map(SetLog::getWeightKg)
+                            .filter(w -> w != null)
+                            .map(BigDecimal::doubleValue)
+                            .max(Comparator.naturalOrder())
+                            .orElse(null);
+
+                    int bestReps = sessionLogs.stream()
+                            .mapToInt(SetLog::getRepsCompleted)
+                            .max().orElse(0);
+
+                    return new ExerciseHistoryEntryDto(date, maxWeight, bestReps, sessionLogs.size());
+                })
                 .toList();
     }
 

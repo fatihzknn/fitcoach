@@ -232,6 +232,15 @@ export interface SubmitCheckInRequest {
   notes: string | null;
 }
 
+// ─── Exercise history types ───────────────────────────────────────────────────
+
+export interface ExerciseHistoryEntryDto {
+  sessionDate: string;
+  maxWeightKg: number | null;
+  bestReps: number;
+  totalSets: number;
+}
+
 // ─── Coach types ──────────────────────────────────────────────────────────────
 
 export type MessageRole = "USER" | "ASSISTANT";
@@ -342,4 +351,10 @@ export const api = {
 
   getCoachHistory: () =>
     request<ChatMessageDto[]>("/api/coach/history", { auth: true }),
+
+  getExerciseHistory: (exerciseId: string) =>
+    request<ExerciseHistoryEntryDto[]>(
+      `/api/sessions/exercise-history?exerciseId=${exerciseId}`,
+      { auth: true },
+    ),
 };
