@@ -30,6 +30,8 @@ server:
 
 app:
   version: 0.1.0
+  # Set to true to seed a demo user on startup (idempotent — skips if already exists)
+  seed-demo-data: ${APP_SEED_DEMO_DATA:true}
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000}
   jwt:

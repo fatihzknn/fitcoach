@@ -49,7 +49,15 @@ export default function TodayPage() {
         setName(me.user.displayName);
         setPlan(activePlan);
         setHistory(sessionHistory);
-        setLatestCheckIn(checkIns[0] ?? null);
+        // Show nudge only when current week (Mon–Sun) has no check-in
+        const currentWeekStart = (() => {
+          const d = new Date();
+          const day = d.getDay();
+          const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+          return new Date(new Date(d).setDate(diff)).toISOString().split("T")[0];
+        })();
+        const hasThisWeek = checkIns.some((c) => c.weekStart === currentWeekStart);
+        setLatestCheckIn(hasThisWeek ? checkIns[0] ?? null : null);
 
         // Auto-select the next day based on the last completed session
         const lastDayNumber = sessionHistory[0]?.workoutDay.dayNumber ?? 0;

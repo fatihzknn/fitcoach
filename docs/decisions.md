@@ -166,3 +166,33 @@ left a detail open and a reasonable assumption was chosen instead of asking.
 - `GET /api/plan/options` — returns `PlanOptionsResponse { recommended, alternative }`
 - `POST /api/plan/select` — body `{ option: "RECOMMENDED" | "ALTERNATIVE" }`, saves plan, returns `WorkoutPlanDto`
 - `GET /api/plan/active` — returns active plan or 404
+
+## Phase 6 — AI Coach
+
+- **MockCoachAiProvider is `@Primary` by default.** `OpenAiCoachAiProvider` is conditionally
+  activated via `@ConditionalOnProperty(name = "app.openai.api-key")`. This means the mock
+  is always used unless the real key is set in environment — safe for development and demos.
+- **Single conversation per user.** Each user has at most one `ChatConversation`; history
+  accumulates in one thread. Chosen for simplicity over multi-thread; can be extended later.
+- **AI context includes:** user name, goal, training background, days/week, pain areas,
+  active plan name, last 5 session names, all coach principles, last 10 chat messages.
+- **Safety disclaimer** is visible below the chat input and in pain-related responses.
+  The AI is explicitly coded to redirect pain/injury questions to healthcare professionals
+  and never diagnose or recommend training through pain.
+- **OpenAiCoachAiProvider skeleton** throws `UnsupportedOperationException` to prevent
+  accidental activation. Completing it requires wiring the OpenAI Java SDK or an HTTP client.
+
+## Phase 7 — Quality & Demo Data
+
+- **DemoDataSeeder** creates user `alex@fitcoach.demo` / `Demo1234!` on startup when
+  `APP_SEED_DEMO_DATA=true` (default in local dev). Idempotent — skips if user exists.
+  Seeds 13 sessions across 4 weeks and 4 weekly check-ins with realistic weight/wellness data.
+  Session timestamps are backdated via a `@Modifying` JPQL update in `WorkoutSessionRepository`
+  to simulate historical data for streak/adherence calculations.
+- **Check-in nudge timezone:** The Today page computes the current week start in local browser
+  time; the backend uses UTC. On systems with UTC offsets that cross midnight on Monday,
+  the nudge may appear one day early or late. Acceptable for MVP; fix by storing the user's
+  timezone preference or using `Intl.DateTimeFormat` with explicit timezone.
+- **V6 migration (hotfix):** V5 created rating columns as `SMALLINT` (int2) but Hibernate
+  maps Java `Integer` to `INTEGER` (int4), causing schema-validation failure. V6 alters the
+  columns — do not modify V5 (would break Flyway checksums on existing databases).
