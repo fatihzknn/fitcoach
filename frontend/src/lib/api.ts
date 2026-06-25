@@ -200,6 +200,38 @@ export interface PreviousSetDto {
   rirActual: number | null;
 }
 
+// ─── Check-in types ────────────────────────────────────────────────────────────
+
+export type CheckInPainStatus = "NO_PAIN" | "MILD_PAIN" | "MODERATE_PAIN" | "SEVERE_PAIN";
+
+export interface WeeklyCheckInDto {
+  id: string;
+  weekStart: string;
+  weightKg: number | null;
+  sleepQualityRating: number | null;
+  energyRating: number | null;
+  stressRating: number | null;
+  painStatus: CheckInPainStatus;
+  notes: string | null;
+}
+
+export interface ProgressStatsDto {
+  totalWorkoutsAllTime: number;
+  workoutsThisWeek: number;
+  currentStreakWeeks: number;
+  adherenceRate4Weeks: number;
+  checkInHistory: WeeklyCheckInDto[];
+}
+
+export interface SubmitCheckInRequest {
+  weightKg: number | null;
+  sleepQualityRating: number | null;
+  energyRating: number | null;
+  stressRating: number | null;
+  painStatus: CheckInPainStatus;
+  notes: string | null;
+}
+
 export const api = {
   baseUrl: API_BASE_URL,
   health: () => request<HealthResponse>("/api/health"),
@@ -274,4 +306,17 @@ export const api = {
 
   getSessionHistory: () =>
     request<WorkoutSessionDto[]>("/api/sessions/history", { auth: true }),
+
+  submitCheckIn: (input: SubmitCheckInRequest) =>
+    request<WeeklyCheckInDto>("/api/check-ins", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    }),
+
+  getCheckInHistory: () =>
+    request<WeeklyCheckInDto[]>("/api/check-ins/history", { auth: true }),
+
+  getProgressStats: () =>
+    request<ProgressStatsDto>("/api/check-ins/stats", { auth: true }),
 };

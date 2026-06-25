@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Dumbbell, ChevronRight, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Dumbbell, ChevronRight, AlertTriangle, CheckCircle2, ClipboardList } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import {
   type WorkoutPlanDto,
   type WorkoutDayDto,
   type WorkoutSessionDto,
+  type WeeklyCheckInDto,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -34,18 +36,20 @@ export default function TodayPage() {
   const [plan, setPlan] = React.useState<WorkoutPlanDto | null>(null);
   const [selectedDay, setSelectedDay] = React.useState<WorkoutDayDto | null>(null);
   const [history, setHistory] = React.useState<WorkoutSessionDto[]>([]);
+  const [latestCheckIn, setLatestCheckIn] = React.useState<WeeklyCheckInDto | null | undefined>(undefined);
   const [loading, setLoading] = React.useState(true);
   const [starting, setStarting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let active = true;
-    Promise.all([api.me(), api.getActivePlan(), api.getSessionHistory()])
-      .then(([me, activePlan, sessionHistory]) => {
+    Promise.all([api.me(), api.getActivePlan(), api.getSessionHistory(), api.getCheckInHistory()])
+      .then(([me, activePlan, sessionHistory, checkIns]) => {
         if (!active) return;
         setName(me.user.displayName);
         setPlan(activePlan);
         setHistory(sessionHistory);
+        setLatestCheckIn(checkIns[0] ?? null);
 
         // Auto-select the next day based on the last completed session
         const lastDayNumber = sessionHistory[0]?.workoutDay.dayNumber ?? 0;
@@ -105,6 +109,20 @@ export default function TodayPage() {
             {loading ? "Loading…" : name ? `Hi, ${name}.` : "Good to see you."}
           </h1>
         </div>
+
+        {/* Weekly check-in nudge — shown when this week has no check-in yet */}
+        {!loading && latestCheckIn === null && (
+          <Link href="/check-in">
+            <div className="flex items-center gap-3 rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 hover:bg-primary/10 transition-colors">
+              <ClipboardList className="h-5 w-5 text-primary flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">Weekly check-in ready</p>
+                <p className="text-xs text-muted-foreground">Log your weight &amp; how you feel</p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+            </div>
+          </Link>
+        )}
 
         {error && (
           <p className="rounded-lg bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
