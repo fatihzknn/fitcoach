@@ -38,7 +38,7 @@ export function middleware(req: NextRequest) {
     if (!hasPlan) return redirect("/plan-selection");
   }
 
-  if (pathname.startsWith("/progress") || pathname.startsWith("/check-in")) {
+  if (pathname.startsWith("/progress") || pathname.startsWith("/check-in") || pathname.startsWith("/coach")) {
     if (!isAuthed) return redirect("/login");
     if (!isOnboarded) return redirect("/onboarding");
     if (!hasPlan) return redirect("/plan-selection");
@@ -61,5 +61,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/today/:path*", "/workout/:path*", "/progress/:path*", "/progress", "/check-in", "/login", "/register", "/onboarding", "/plan-selection"],
+  matcher: ["/", "/today/:path*", "/workout/:path*", "/progress/:path*", "/progress", "/check-in", "/coach", "/login", "/register", "/onboarding", "/plan-selection"],
 };

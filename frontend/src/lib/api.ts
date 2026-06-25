@@ -232,6 +232,17 @@ export interface SubmitCheckInRequest {
   notes: string | null;
 }
 
+// ─── Coach types ──────────────────────────────────────────────────────────────
+
+export type MessageRole = "USER" | "ASSISTANT";
+
+export interface ChatMessageDto {
+  id: string;
+  role: MessageRole;
+  content: string;
+  createdAt: string;
+}
+
 export const api = {
   baseUrl: API_BASE_URL,
   health: () => request<HealthResponse>("/api/health"),
@@ -319,4 +330,16 @@ export const api = {
 
   getProgressStats: () =>
     request<ProgressStatsDto>("/api/check-ins/stats", { auth: true }),
+
+  // ─── Coach ─────────────────────────────────────────────────────────────────
+
+  coachChat: (message: string) =>
+    request<ChatMessageDto[]>("/api/coach/chat", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify({ message }),
+    }),
+
+  getCoachHistory: () =>
+    request<ChatMessageDto[]>("/api/coach/history", { auth: true }),
 };
