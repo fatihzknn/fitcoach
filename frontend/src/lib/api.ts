@@ -114,6 +114,26 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return body as T;
 }
 
+// ─── Trainer philosophy types ─────────────────────────────────────────────────
+
+export interface TrainerPhilosophyDto {
+  id: string;
+  slug: string;
+  displayName: string;
+  tagline: string;
+  description: string;
+  compoundRepMin: number;
+  compoundRepMax: number;
+  isolationRepMin: number;
+  isolationRepMax: number;
+  restSecondsCompound: number;
+  restSecondsIsolation: number;
+  rirTarget: number;
+  setsCompound: number;
+  setsIsolation: number;
+  deloadFrequencyWeeks: number;
+}
+
 // ─── Workout plan types ────────────────────────────────────────────────────────
 
 export type MuscleGroup =
@@ -162,6 +182,8 @@ export interface WorkoutPlanDto {
   isActive: boolean;
   sustainabilityWarning: string | null;
   days: WorkoutDayDto[];
+  trainerPhilosophyId: string | null;
+  trainerPhilosophyName: string | null;
 }
 
 export interface PlanOptionsResponse {
@@ -279,10 +301,16 @@ export const api = {
 
   profile: () => request<FitnessProfileDto>("/api/profile", { auth: true }),
 
-  getPlanOptions: () =>
-    request<PlanOptionsResponse>("/api/plan/options", { auth: true }),
+  getTrainers: () =>
+    request<TrainerPhilosophyDto[]>("/api/trainers", { auth: true }),
 
-  selectPlan: (input: { option: PlanOption }) =>
+  getPlanOptions: (trainerId?: string) =>
+    request<PlanOptionsResponse>(
+      `/api/plan/options${trainerId ? `?trainerId=${trainerId}` : ""}`,
+      { auth: true },
+    ),
+
+  selectPlan: (input: { option: PlanOption; trainerId?: string }) =>
     request<WorkoutPlanDto>("/api/plan/select", {
       method: "POST",
       auth: true,

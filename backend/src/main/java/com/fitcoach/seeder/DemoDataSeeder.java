@@ -110,7 +110,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         profileService.completeOnboarding(cu, onboarding);
 
         // ── 3. Plan selection ────────────────────────────────────────────────
-        planService.selectPlan(cu, new SelectPlanRequest(PlanOption.RECOMMENDED));
+        planService.selectPlan(cu, new SelectPlanRequest(PlanOption.RECOMMENDED, null));
 
         WorkoutPlan plan = planRepository.findByUserIdAndIsActiveTrue(user.getId())
                 .orElseThrow(() -> new IllegalStateException("Plan not saved after selection."));

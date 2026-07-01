@@ -6,6 +6,8 @@ import com.fitcoach.exercise.Exercise;
 import com.fitcoach.exercise.ExerciseRepository;
 import com.fitcoach.profile.FitnessProfile;
 import com.fitcoach.profile.FitnessProfileRepository;
+import com.fitcoach.trainer.TrainerPhilosophy;
+import com.fitcoach.trainer.TrainerPhilosophyRepository;
 import com.fitcoach.workout.domain.PlanOption;
 import com.fitcoach.workout.dto.PlanOptionsResponse;
 import com.fitcoach.workout.dto.SelectPlanRequest;
@@ -27,22 +29,26 @@ public class WorkoutPlanService {
     private final FitnessProfileRepository profileRepository;
     private final ExerciseRepository exerciseRepository;
     private final WorkoutGenerationService generationService;
+    private final TrainerPhilosophyRepository trainerRepository;
 
     public WorkoutPlanService(WorkoutPlanRepository planRepository,
                                FitnessProfileRepository profileRepository,
                                ExerciseRepository exerciseRepository,
-                               WorkoutGenerationService generationService) {
+                               WorkoutGenerationService generationService,
+                               TrainerPhilosophyRepository trainerRepository) {
         this.planRepository = planRepository;
         this.profileRepository = profileRepository;
         this.exerciseRepository = exerciseRepository;
         this.generationService = generationService;
+        this.trainerRepository = trainerRepository;
     }
 
     @Transactional(readOnly = true)
-    public PlanOptionsResponse getPlanOptions(CurrentUser currentUser) {
+    public PlanOptionsResponse getPlanOptions(CurrentUser currentUser, UUID trainerId) {
         FitnessProfile profile = requireProfile(currentUser.id());
         Map<String, Exercise> byName = loadExercisesByName();
-        return generationService.generateOptions(profile, byName);
+        TrainerPhilosophy trainer = resolveTrainer(trainerId);
+        return generationService.generateOptions(profile, byName, trainer);
     }
 
     @Transactional
@@ -55,7 +61,8 @@ public class WorkoutPlanService {
         Map<UUID, Exercise> byId = allExercises.stream()
                 .collect(Collectors.toMap(Exercise::getId, e -> e));
 
-        PlanOptionsResponse options = generationService.generateOptions(profile, byName);
+        TrainerPhilosophy trainer = resolveTrainer(request.trainerId());
+        PlanOptionsResponse options = generationService.generateOptions(profile, byName, trainer);
         WorkoutPlanDto chosenDto = request.option() == PlanOption.RECOMMENDED
                 ? options.recommended()
                 : options.alternative();
@@ -75,6 +82,7 @@ public class WorkoutPlanService {
                 chosenDto.trainingDaysPerWeek()
         );
         plan.setSustainabilityWarning(chosenDto.sustainabilityWarning());
+        plan.setTrainerPhilosophy(trainer.getId(), trainer.getDisplayName());
         plan.activate();
 
         for (WorkoutDayDto dayDto : chosenDto.days()) {
@@ -104,6 +112,17 @@ public class WorkoutPlanService {
         WorkoutPlan plan = planRepository.findByUserIdAndIsActiveTrue(currentUser.id())
                 .orElseThrow(() -> new NotFoundException("No active workout plan. Select a plan first."));
         return WorkoutPlanDto.from(plan);
+    }
+
+    /** Returns the trainer by ID, or the first (default) trainer if no ID supplied. */
+    private TrainerPhilosophy resolveTrainer(UUID trainerId) {
+        if (trainerId != null) {
+            return trainerRepository.findById(trainerId)
+                    .orElseThrow(() -> new NotFoundException("Trainer philosophy not found."));
+        }
+        return trainerRepository.findAllByOrderBySortOrderAsc()
+                .stream().findFirst()
+                .orElseThrow(() -> new IllegalStateException("No trainer philosophies seeded."));
     }
 
     private FitnessProfile requireProfile(UUID userId) {

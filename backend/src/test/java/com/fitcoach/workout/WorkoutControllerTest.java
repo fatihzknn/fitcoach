@@ -57,7 +57,7 @@ class WorkoutControllerTest {
     void getPlanOptionsReturns200WithBothOptions() throws Exception {
         WorkoutPlanDto recommended = planDto("Full Body A/B", 3);
         WorkoutPlanDto alternative = planDto("Machine-Friendly Full Body", 3);
-        when(planService.getPlanOptions(any())).thenReturn(new PlanOptionsResponse(recommended, alternative));
+        when(planService.getPlanOptions(any(), any())).thenReturn(new PlanOptionsResponse(recommended, alternative));
 
         mockMvc.perform(get("/api/plan/options"))
                 .andExpect(status().isOk())
@@ -70,7 +70,7 @@ class WorkoutControllerTest {
         WorkoutPlanDto saved = planDto("Full Body A/B", 3);
         when(planService.selectPlan(any(), any())).thenReturn(saved);
 
-        String body = objectMapper.writeValueAsString(new SelectPlanRequest(PlanOption.RECOMMENDED));
+        String body = objectMapper.writeValueAsString(new SelectPlanRequest(PlanOption.RECOMMENDED, null));
 
         mockMvc.perform(post("/api/plan/select")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -110,7 +110,8 @@ class WorkoutControllerTest {
         return new WorkoutPlanDto(
                 UUID.randomUUID(), name, MainGoal.MUSCLE_GAIN, days,
                 true, null,
-                List.of(new WorkoutDayDto(UUID.randomUUID(), 1, "Day 1", List.of()))
+                List.of(new WorkoutDayDto(UUID.randomUUID(), 1, "Day 1", List.of())),
+                null, null
         );
     }
 }

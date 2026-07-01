@@ -1,10 +1,12 @@
 package com.fitcoach.workout;
 
 import com.fitcoach.exercise.Exercise;
+import com.fitcoach.exercise.domain.MovementPattern;
 import com.fitcoach.exercise.dto.ExerciseDto;
 import com.fitcoach.profile.FitnessProfile;
 import com.fitcoach.profile.domain.MainGoal;
 import com.fitcoach.profile.domain.TrainingBackground;
+import com.fitcoach.trainer.TrainerPhilosophy;
 import com.fitcoach.workout.dto.PlanOptionsResponse;
 import com.fitcoach.workout.dto.WorkoutDayDto;
 import com.fitcoach.workout.dto.WorkoutExerciseDto;
@@ -17,9 +19,12 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Deterministic workout plan generator. Receives the user's fitness profile and
- * a pre-loaded exercise map, and returns two plan options (recommended + alternative)
- * without writing to the database.
+ * Deterministic workout plan generator. Takes the user's fitness profile and a trainer
+ * philosophy, and returns two plan options without writing to the database.
+ *
+ * The split structure (Full Body / Upper-Lower / PPL) is chosen by experience level + days.
+ * Volume (sets, rep ranges, rest, RIR) comes from the trainer philosophy, with beginner
+ * safety caps applied automatically.
  */
 @Service
 public class WorkoutGenerationService {
@@ -27,43 +32,80 @@ public class WorkoutGenerationService {
     private static final String SUSTAINABILITY_WARNING =
             "5 sessions per week is demanding. Ensure 7–8 hours of sleep and listen to your body.";
 
-    public PlanOptionsResponse generateOptions(FitnessProfile profile, Map<String, Exercise> exercises) {
-        boolean isBeginner = profile.getTrainingBackground() == TrainingBackground.STARTING
-                          || profile.getTrainingBackground() == TrainingBackground.RETURNING;
+    // ─────────────────────────────────────────────────────────────────────────
+    // Template parameters derived from the trainer philosophy
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private record TemplateParams(
+            int cSets, int cRepMin, int cRepMax, String cRir, int cRest,
+            int iSets, int iRepMin, int iRepMax, String iRir, int iRest
+    ) {}
+
+    private TemplateParams buildParams(FitnessProfile profile, TrainerPhilosophy trainer) {
+        boolean beginner = isBeginner(profile);
+
+        // Beginners cap sets and use higher RIR (train further from failure)
+        int cSets = beginner ? Math.min(trainer.getSetsCompound(), 3) : trainer.getSetsCompound();
+        int iSets = beginner ? Math.min(trainer.getSetsIsolation(), 2) : trainer.getSetsIsolation();
+
+        // For very low rep ranges (strength trainer), shift beginners into a safer window
+        int cRepMin = beginner ? Math.max(trainer.getCompoundRepMin(), 8) : trainer.getCompoundRepMin();
+        int cRepMax = beginner ? Math.max(trainer.getCompoundRepMax(), 12) : trainer.getCompoundRepMax();
+        int iRepMin = trainer.getIsolationRepMin();
+        int iRepMax = trainer.getIsolationRepMax();
+
+        int rir = beginner ? Math.max(trainer.getRirTarget(), 2) : trainer.getRirTarget();
+        String cRir = rir + " RIR";
+        String iRir = beginner ? (rir + "-" + (rir + 1) + " RIR") : (rir + " RIR");
+
+        return new TemplateParams(
+                cSets, cRepMin, cRepMax, cRir, trainer.getRestSecondsCompound(),
+                iSets, iRepMin, iRepMax, iRir, trainer.getRestSecondsIsolation()
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Public API
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public PlanOptionsResponse generateOptions(FitnessProfile profile,
+                                               Map<String, Exercise> exercises,
+                                               TrainerPhilosophy trainer) {
+        boolean beginner = isBeginner(profile);
         int days = profile.getTrainingDaysPerWeek();
-        MainGoal goal = profile.getMainGoal();
+        TemplateParams tp = buildParams(profile, trainer);
 
         WorkoutPlanDto recommended;
         WorkoutPlanDto alternative;
 
-        if (isBeginner) {
+        if (beginner) {
             switch (days) {
                 case 3 -> {
-                    recommended = buildBeginnerFullBodyAB(profile, exercises, null);
-                    alternative = buildBeginnerMachineFriendly(profile, exercises, null);
+                    recommended = buildBeginnerFullBodyAB(profile, exercises, null, tp, trainer);
+                    alternative = buildBeginnerMachineFriendly(profile, exercises, null, tp, trainer);
                 }
                 case 4 -> {
-                    recommended = buildBeginnerUpperLower(profile, exercises, null);
-                    alternative = buildBeginnerFullBodyX4(profile, exercises, null);
+                    recommended = buildBeginnerUpperLower(profile, exercises, null, tp, trainer);
+                    alternative = buildBeginnerFullBodyX4(profile, exercises, null, tp, trainer);
                 }
-                default -> { // 5 days
-                    recommended = buildBeginnerUpperLowerPlusArms(profile, exercises, SUSTAINABILITY_WARNING);
-                    alternative = buildPPLPartial(profile, exercises, SUSTAINABILITY_WARNING, false);
+                default -> {
+                    recommended = buildBeginnerUpperLowerPlusArms(profile, exercises, SUSTAINABILITY_WARNING, tp, trainer);
+                    alternative = buildPPLPartial(profile, exercises, SUSTAINABILITY_WARNING, false, tp, trainer);
                 }
             }
-        } else { // REGULAR
+        } else {
             switch (days) {
                 case 3 -> {
-                    recommended = buildRegularFullBody(profile, exercises, null);
-                    alternative = buildPPL(profile, exercises, null);
+                    recommended = buildRegularFullBody(profile, exercises, null, tp, trainer);
+                    alternative = buildPPL(profile, exercises, null, tp, trainer);
                 }
                 case 4 -> {
-                    recommended = buildRegularUpperLower(profile, exercises, null);
-                    alternative = buildPPLPartial(profile, exercises, null, true);
+                    recommended = buildRegularUpperLower(profile, exercises, null, tp, trainer);
+                    alternative = buildPPLPartial(profile, exercises, null, true, tp, trainer);
                 }
-                default -> { // 5 days
-                    recommended = buildPPLPlusUpperLower(profile, exercises, SUSTAINABILITY_WARNING);
-                    alternative = buildRegularUpperLowerX5(profile, exercises, SUSTAINABILITY_WARNING);
+                default -> {
+                    recommended = buildPPLPlusUpperLower(profile, exercises, SUSTAINABILITY_WARNING, tp, trainer);
+                    alternative = buildRegularUpperLowerX5(profile, exercises, SUSTAINABILITY_WARNING, tp, trainer);
                 }
             }
         }
@@ -75,461 +117,461 @@ public class WorkoutGenerationService {
     // Beginner templates
     // ─────────────────────────────────────────────────────────────────────────
 
-    private WorkoutPlanDto buildBeginnerFullBodyAB(FitnessProfile p, Map<String, Exercise> ex, String warning) {
-        String name = "Full Body 3-Day (A/B)";
+    private WorkoutPlanDto buildBeginnerFullBodyAB(FitnessProfile p, Map<String, Exercise> ex,
+                                                    String warning, TemplateParams tp,
+                                                    TrainerPhilosophy trainer) {
         List<WorkoutDayDto> days = List.of(
-                buildDay(null, 1, "Full Body A", List.of(
-                        slot(ex, "Chest Press Machine",  3, 10, 12, "2-3 RIR", 90),
-                        slot(ex, "Lat Pulldown",         3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Leg Press",            3, 12, 15, "3 RIR",   90),
-                        slot(ex, "Romanian Deadlift",    3, 10, 12, "3 RIR",   60),
-                        slot(ex, "Lateral Raise",        3, 12, 15, "3 RIR",   45),
-                        slot(ex, "Biceps Curl",          2, 12, 15, "3 RIR",   45)
+                buildDay(1, "Full Body A", List.of(
+                        slot(ex, "Chest Press Machine", tp),
+                        slot(ex, "Lat Pulldown",        tp),
+                        slot(ex, "Leg Press",           tp),
+                        slot(ex, "Romanian Deadlift",   tp),
+                        slot(ex, "Lateral Raise",       tp),
+                        slot(ex, "Biceps Curl",         tp)
                 )),
-                buildDay(null, 2, "Full Body B", List.of(
-                        slot(ex, "Dumbbell Bench Press", 3, 10, 12, "2-3 RIR", 90),
-                        slot(ex, "Cable Row",            3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Leg Press",            3, 12, 15, "3 RIR",   90),
-                        slot(ex, "Leg Curl",             3, 12, 15, "3 RIR",   45),
-                        slot(ex, "Leg Extension",        3, 12, 15, "3 RIR",   45),
-                        slot(ex, "Triceps Pushdown",     2, 12, 15, "3 RIR",   45)
+                buildDay(2, "Full Body B", List.of(
+                        slot(ex, "Dumbbell Bench Press", tp),
+                        slot(ex, "Cable Row",            tp),
+                        slot(ex, "Leg Press",            tp),
+                        slot(ex, "Leg Curl",             tp),
+                        slot(ex, "Leg Extension",        tp),
+                        slot(ex, "Triceps Pushdown",     tp)
                 )),
-                buildDay(null, 3, "Full Body A", List.of(
-                        slot(ex, "Chest Press Machine",  3, 10, 12, "2-3 RIR", 90),
-                        slot(ex, "Lat Pulldown",         3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Leg Press",            3, 12, 15, "3 RIR",   90),
-                        slot(ex, "Romanian Deadlift",    3, 10, 12, "3 RIR",   60),
-                        slot(ex, "Lateral Raise",        3, 12, 15, "3 RIR",   45),
-                        slot(ex, "Biceps Curl",          2, 12, 15, "3 RIR",   45)
+                buildDay(3, "Full Body A", List.of(
+                        slot(ex, "Chest Press Machine", tp),
+                        slot(ex, "Lat Pulldown",        tp),
+                        slot(ex, "Leg Press",           tp),
+                        slot(ex, "Romanian Deadlift",   tp),
+                        slot(ex, "Lateral Raise",       tp),
+                        slot(ex, "Biceps Curl",         tp)
                 ))
         );
-        return plan(name, p, warning, days);
+        return plan("Full Body 3-Day (A/B)", p, warning, days, trainer);
     }
 
-    private WorkoutPlanDto buildBeginnerMachineFriendly(FitnessProfile p, Map<String, Exercise> ex, String warning) {
-        String name = "Machine-Friendly Full Body";
+    private WorkoutPlanDto buildBeginnerMachineFriendly(FitnessProfile p, Map<String, Exercise> ex,
+                                                         String warning, TemplateParams tp,
+                                                         TrainerPhilosophy trainer) {
         List<WorkoutDayDto> days = List.of(
-                buildDay(null, 1, "Full Body A", List.of(
-                        slot(ex, "Chest Press Machine",  3, 12, 15, "3 RIR", 75),
-                        slot(ex, "Lat Pulldown",         3, 12, 15, "3 RIR", 60),
-                        slot(ex, "Leg Press",            3, 15, 20, "3 RIR", 90),
-                        slot(ex, "Leg Curl",             3, 12, 15, "3 RIR", 45),
-                        slot(ex, "Lateral Raise",        3, 15, 20, "3 RIR", 45),
-                        slot(ex, "Biceps Curl",          2, 12, 15, "3 RIR", 45)
+                buildDay(1, "Full Body A", List.of(
+                        slot(ex, "Chest Press Machine", tp),
+                        slot(ex, "Lat Pulldown",        tp),
+                        slot(ex, "Leg Press",           tp),
+                        slot(ex, "Leg Curl",            tp),
+                        slot(ex, "Lateral Raise",       tp),
+                        slot(ex, "Biceps Curl",         tp)
                 )),
-                buildDay(null, 2, "Full Body B", List.of(
-                        slot(ex, "Chest Press Machine",  3, 12, 15, "3 RIR", 75),
-                        slot(ex, "Cable Row",            3, 12, 15, "3 RIR", 60),
-                        slot(ex, "Leg Press",            3, 15, 20, "3 RIR", 90),
-                        slot(ex, "Leg Extension",        3, 12, 15, "3 RIR", 45),
-                        slot(ex, "Lateral Raise",        3, 15, 20, "3 RIR", 45),
-                        slot(ex, "Triceps Pushdown",     2, 12, 15, "3 RIR", 45)
+                buildDay(2, "Full Body B", List.of(
+                        slot(ex, "Chest Press Machine", tp),
+                        slot(ex, "Cable Row",           tp),
+                        slot(ex, "Leg Press",           tp),
+                        slot(ex, "Leg Extension",       tp),
+                        slot(ex, "Lateral Raise",       tp),
+                        slot(ex, "Triceps Pushdown",    tp)
                 )),
-                buildDay(null, 3, "Full Body A", List.of(
-                        slot(ex, "Chest Press Machine",  3, 12, 15, "3 RIR", 75),
-                        slot(ex, "Lat Pulldown",         3, 12, 15, "3 RIR", 60),
-                        slot(ex, "Leg Press",            3, 15, 20, "3 RIR", 90),
-                        slot(ex, "Leg Curl",             3, 12, 15, "3 RIR", 45),
-                        slot(ex, "Lateral Raise",        3, 15, 20, "3 RIR", 45),
-                        slot(ex, "Biceps Curl",          2, 12, 15, "3 RIR", 45)
+                buildDay(3, "Full Body A", List.of(
+                        slot(ex, "Chest Press Machine", tp),
+                        slot(ex, "Lat Pulldown",        tp),
+                        slot(ex, "Leg Press",           tp),
+                        slot(ex, "Leg Curl",            tp),
+                        slot(ex, "Lateral Raise",       tp),
+                        slot(ex, "Biceps Curl",         tp)
                 ))
         );
-        return plan(name, p, warning, days);
+        return plan("Machine-Friendly Full Body", p, warning, days, trainer);
     }
 
-    private WorkoutPlanDto buildBeginnerUpperLower(FitnessProfile p, Map<String, Exercise> ex, String warning) {
-        String name = "Upper / Lower Split";
+    private WorkoutPlanDto buildBeginnerUpperLower(FitnessProfile p, Map<String, Exercise> ex,
+                                                    String warning, TemplateParams tp,
+                                                    TrainerPhilosophy trainer) {
         List<WorkoutDayDto> days = List.of(
-                buildDay(null, 1, "Upper A", List.of(
-                        slot(ex, "Dumbbell Bench Press", 3, 10, 12, "2-3 RIR", 90),
-                        slot(ex, "Lat Pulldown",         3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Overhead Press",       3, 10, 12, "2-3 RIR", 75),
-                        slot(ex, "Dumbbell Row",         3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Biceps Curl",          2, 12, 15, "3 RIR",   45),
-                        slot(ex, "Triceps Pushdown",     2, 12, 15, "3 RIR",   45)
+                buildDay(1, "Upper A", List.of(
+                        slot(ex, "Dumbbell Bench Press", tp),
+                        slot(ex, "Lat Pulldown",         tp),
+                        slot(ex, "Overhead Press",       tp),
+                        slot(ex, "Dumbbell Row",         tp),
+                        slot(ex, "Biceps Curl",          tp),
+                        slot(ex, "Triceps Pushdown",     tp)
                 )),
-                buildDay(null, 2, "Lower A", List.of(
-                        slot(ex, "Leg Press",         3, 10, 12, "2-3 RIR", 90),
-                        slot(ex, "Romanian Deadlift", 3, 10, 12, "2-3 RIR", 90),
-                        slot(ex, "Leg Curl",          3, 12, 15, "3 RIR",   45),
-                        slot(ex, "Leg Extension",     3, 12, 15, "3 RIR",   45),
-                        slot(ex, "Hip Thrust",        3, 12, 15, "3 RIR",   60)
+                buildDay(2, "Lower A", List.of(
+                        slot(ex, "Leg Press",         tp),
+                        slot(ex, "Romanian Deadlift", tp),
+                        slot(ex, "Leg Curl",          tp),
+                        slot(ex, "Leg Extension",     tp),
+                        slot(ex, "Hip Thrust",        tp)
                 )),
-                buildDay(null, 3, "Upper B", List.of(
-                        slot(ex, "Chest Press Machine", 3, 10, 12, "2-3 RIR", 75),
-                        slot(ex, "Cable Row",           3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Overhead Press",      3, 10, 12, "2-3 RIR", 75),
-                        slot(ex, "Lat Pulldown",        3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Lateral Raise",       3, 12, 15, "3 RIR",   45),
-                        slot(ex, "Triceps Pushdown",    2, 12, 15, "3 RIR",   45)
+                buildDay(3, "Upper B", List.of(
+                        slot(ex, "Chest Press Machine", tp),
+                        slot(ex, "Cable Row",           tp),
+                        slot(ex, "Overhead Press",      tp),
+                        slot(ex, "Lat Pulldown",        tp),
+                        slot(ex, "Lateral Raise",       tp),
+                        slot(ex, "Triceps Pushdown",    tp)
                 )),
-                buildDay(null, 4, "Lower B", List.of(
-                        slot(ex, "Leg Press",         3, 12, 15, "3 RIR",   90),
-                        slot(ex, "Romanian Deadlift", 3, 10, 12, "2-3 RIR", 90),
-                        slot(ex, "Goblet Squat",      3, 12, 15, "3 RIR",   75),
-                        slot(ex, "Leg Curl",          3, 12, 15, "3 RIR",   45),
-                        slot(ex, "Hip Thrust",        3, 12, 15, "3 RIR",   60)
+                buildDay(4, "Lower B", List.of(
+                        slot(ex, "Leg Press",         tp),
+                        slot(ex, "Romanian Deadlift", tp),
+                        slot(ex, "Goblet Squat",      tp),
+                        slot(ex, "Leg Curl",          tp),
+                        slot(ex, "Hip Thrust",        tp)
                 ))
         );
-        return plan(name, p, warning, days);
+        return plan("Upper / Lower Split", p, warning, days, trainer);
     }
 
-    private WorkoutPlanDto buildBeginnerFullBodyX4(FitnessProfile p, Map<String, Exercise> ex, String warning) {
-        String name = "Full Body 4-Day (A/B/A/B)";
+    private WorkoutPlanDto buildBeginnerFullBodyX4(FitnessProfile p, Map<String, Exercise> ex,
+                                                    String warning, TemplateParams tp,
+                                                    TrainerPhilosophy trainer) {
         List<WorkoutDayDto> days = List.of(
-                buildDay(null, 1, "Full Body A", List.of(
-                        slot(ex, "Chest Press Machine",  3, 12, 15, "3 RIR", 75),
-                        slot(ex, "Lat Pulldown",         3, 12, 15, "3 RIR", 60),
-                        slot(ex, "Leg Press",            3, 12, 15, "3 RIR", 90),
-                        slot(ex, "Romanian Deadlift",    3, 10, 12, "3 RIR", 75),
-                        slot(ex, "Lateral Raise",        3, 12, 15, "3 RIR", 45)
+                buildDay(1, "Full Body A", List.of(
+                        slot(ex, "Chest Press Machine",  tp),
+                        slot(ex, "Lat Pulldown",         tp),
+                        slot(ex, "Leg Press",            tp),
+                        slot(ex, "Romanian Deadlift",    tp),
+                        slot(ex, "Lateral Raise",        tp)
                 )),
-                buildDay(null, 2, "Full Body B", List.of(
-                        slot(ex, "Dumbbell Bench Press", 3, 12, 15, "3 RIR", 75),
-                        slot(ex, "Cable Row",            3, 12, 15, "3 RIR", 60),
-                        slot(ex, "Leg Press",            3, 12, 15, "3 RIR", 90),
-                        slot(ex, "Leg Curl",             3, 12, 15, "3 RIR", 45),
-                        slot(ex, "Biceps Curl",          2, 12, 15, "3 RIR", 45)
+                buildDay(2, "Full Body B", List.of(
+                        slot(ex, "Dumbbell Bench Press", tp),
+                        slot(ex, "Cable Row",            tp),
+                        slot(ex, "Leg Press",            tp),
+                        slot(ex, "Leg Curl",             tp),
+                        slot(ex, "Biceps Curl",          tp)
                 )),
-                buildDay(null, 3, "Full Body A", List.of(
-                        slot(ex, "Chest Press Machine",  3, 12, 15, "3 RIR", 75),
-                        slot(ex, "Lat Pulldown",         3, 12, 15, "3 RIR", 60),
-                        slot(ex, "Leg Press",            3, 12, 15, "3 RIR", 90),
-                        slot(ex, "Romanian Deadlift",    3, 10, 12, "3 RIR", 75),
-                        slot(ex, "Lateral Raise",        3, 12, 15, "3 RIR", 45)
+                buildDay(3, "Full Body A", List.of(
+                        slot(ex, "Chest Press Machine",  tp),
+                        slot(ex, "Lat Pulldown",         tp),
+                        slot(ex, "Leg Press",            tp),
+                        slot(ex, "Romanian Deadlift",    tp),
+                        slot(ex, "Lateral Raise",        tp)
                 )),
-                buildDay(null, 4, "Full Body B", List.of(
-                        slot(ex, "Dumbbell Bench Press", 3, 12, 15, "3 RIR", 75),
-                        slot(ex, "Cable Row",            3, 12, 15, "3 RIR", 60),
-                        slot(ex, "Leg Press",            3, 12, 15, "3 RIR", 90),
-                        slot(ex, "Leg Curl",             3, 12, 15, "3 RIR", 45),
-                        slot(ex, "Biceps Curl",          2, 12, 15, "3 RIR", 45)
+                buildDay(4, "Full Body B", List.of(
+                        slot(ex, "Dumbbell Bench Press", tp),
+                        slot(ex, "Cable Row",            tp),
+                        slot(ex, "Leg Press",            tp),
+                        slot(ex, "Leg Curl",             tp),
+                        slot(ex, "Biceps Curl",          tp)
                 ))
         );
-        return plan(name, p, warning, days);
+        return plan("Full Body 4-Day (A/B/A/B)", p, warning, days, trainer);
     }
 
-    private WorkoutPlanDto buildBeginnerUpperLowerPlusArms(FitnessProfile p, Map<String, Exercise> ex, String warning) {
-        String name = "Upper / Lower + Arms Focus";
+    private WorkoutPlanDto buildBeginnerUpperLowerPlusArms(FitnessProfile p, Map<String, Exercise> ex,
+                                                            String warning, TemplateParams tp,
+                                                            TrainerPhilosophy trainer) {
         List<WorkoutDayDto> days = List.of(
-                buildDay(null, 1, "Upper", List.of(
-                        slot(ex, "Dumbbell Bench Press", 3, 10, 12, "2-3 RIR", 90),
-                        slot(ex, "Lat Pulldown",         3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Overhead Press",       3, 10, 12, "2-3 RIR", 75),
-                        slot(ex, "Cable Row",            3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Lateral Raise",        3, 12, 15, "3 RIR",   45)
+                buildDay(1, "Upper", List.of(
+                        slot(ex, "Dumbbell Bench Press", tp),
+                        slot(ex, "Lat Pulldown",         tp),
+                        slot(ex, "Overhead Press",       tp),
+                        slot(ex, "Cable Row",            tp),
+                        slot(ex, "Lateral Raise",        tp)
                 )),
-                buildDay(null, 2, "Lower", List.of(
-                        slot(ex, "Leg Press",         3, 10, 12, "2-3 RIR", 90),
-                        slot(ex, "Romanian Deadlift", 3, 10, 12, "2-3 RIR", 90),
-                        slot(ex, "Leg Curl",          3, 12, 15, "3 RIR",   45),
-                        slot(ex, "Leg Extension",     3, 12, 15, "3 RIR",   45),
-                        slot(ex, "Hip Thrust",        3, 12, 15, "3 RIR",   60)
+                buildDay(2, "Lower", List.of(
+                        slot(ex, "Leg Press",         tp),
+                        slot(ex, "Romanian Deadlift", tp),
+                        slot(ex, "Leg Curl",          tp),
+                        slot(ex, "Leg Extension",     tp),
+                        slot(ex, "Hip Thrust",        tp)
                 )),
-                buildDay(null, 3, "Upper", List.of(
-                        slot(ex, "Chest Press Machine", 3, 10, 12, "2-3 RIR", 75),
-                        slot(ex, "Dumbbell Row",        3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Overhead Press",      3, 10, 12, "2-3 RIR", 75),
-                        slot(ex, "Lat Pulldown",        3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Lateral Raise",       3, 12, 15, "3 RIR",   45)
+                buildDay(3, "Upper", List.of(
+                        slot(ex, "Chest Press Machine", tp),
+                        slot(ex, "Dumbbell Row",        tp),
+                        slot(ex, "Overhead Press",      tp),
+                        slot(ex, "Lat Pulldown",        tp),
+                        slot(ex, "Lateral Raise",       tp)
                 )),
-                buildDay(null, 4, "Lower", List.of(
-                        slot(ex, "Leg Press",         3, 12, 15, "3 RIR",   90),
-                        slot(ex, "Romanian Deadlift", 3, 10, 12, "2-3 RIR", 90),
-                        slot(ex, "Goblet Squat",      3, 12, 15, "3 RIR",   75),
-                        slot(ex, "Leg Curl",          3, 12, 15, "3 RIR",   45),
-                        slot(ex, "Hip Thrust",        3, 12, 15, "3 RIR",   60)
+                buildDay(4, "Lower", List.of(
+                        slot(ex, "Leg Press",         tp),
+                        slot(ex, "Romanian Deadlift", tp),
+                        slot(ex, "Goblet Squat",      tp),
+                        slot(ex, "Leg Curl",          tp),
+                        slot(ex, "Hip Thrust",        tp)
                 )),
-                buildDay(null, 5, "Arms & Shoulders", List.of(
-                        slot(ex, "Biceps Curl",      3, 12, 15, "3 RIR", 45),
-                        slot(ex, "Triceps Pushdown", 3, 12, 15, "3 RIR", 45),
-                        slot(ex, "Lateral Raise",    4, 12, 15, "3 RIR", 45),
-                        slot(ex, "Overhead Press",   3, 10, 12, "3 RIR", 60),
-                        slot(ex, "Biceps Curl",      2, 15, 20, "4 RIR", 30)
+                buildDay(5, "Arms & Shoulders", List.of(
+                        slot(ex, "Biceps Curl",      tp),
+                        slot(ex, "Triceps Pushdown", tp),
+                        slot(ex, "Lateral Raise",    tp),
+                        slot(ex, "Overhead Press",   tp)
                 ))
         );
-        return plan(name, p, warning, days);
+        return plan("Upper / Lower + Arms Focus", p, warning, days, trainer);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Regular templates
+    // Regular (intermediate) templates
     // ─────────────────────────────────────────────────────────────────────────
 
-    private WorkoutPlanDto buildRegularFullBody(FitnessProfile p, Map<String, Exercise> ex, String warning) {
-        String name = "Full Body 3-Day (Intermediate)";
+    private WorkoutPlanDto buildRegularFullBody(FitnessProfile p, Map<String, Exercise> ex,
+                                                 String warning, TemplateParams tp,
+                                                 TrainerPhilosophy trainer) {
         List<WorkoutDayDto> days = List.of(
-                buildDay(null, 1, "Full Body A", List.of(
-                        slot(ex, "Barbell Bench Press",  4, 8, 10, "2 RIR", 120),
-                        slot(ex, "Lat Pulldown",         4, 8, 10, "2 RIR",  90),
-                        slot(ex, "Leg Press",            4, 8, 10, "2 RIR", 120),
-                        slot(ex, "Romanian Deadlift",    3, 8, 10, "2 RIR",  90),
-                        slot(ex, "Lateral Raise",        3, 12, 15, "3 RIR",  45),
-                        slot(ex, "Biceps Curl",          3, 10, 12, "2 RIR",  45)
+                buildDay(1, "Full Body A", List.of(
+                        slot(ex, "Barbell Bench Press", tp),
+                        slot(ex, "Lat Pulldown",        tp),
+                        slot(ex, "Leg Press",           tp),
+                        slot(ex, "Romanian Deadlift",   tp),
+                        slot(ex, "Lateral Raise",       tp),
+                        slot(ex, "Biceps Curl",         tp)
                 )),
-                buildDay(null, 2, "Full Body B", List.of(
-                        slot(ex, "Dumbbell Bench Press", 4, 8, 10, "2 RIR", 90),
-                        slot(ex, "Cable Row",            4, 8, 10, "2 RIR", 75),
-                        slot(ex, "Leg Press",            4, 8, 10, "2 RIR", 120),
-                        slot(ex, "Hip Thrust",           4, 10, 12, "2 RIR", 75),
-                        slot(ex, "Overhead Press",       3, 8, 10, "2 RIR",  90),
-                        slot(ex, "Triceps Pushdown",     3, 10, 12, "2 RIR",  45)
+                buildDay(2, "Full Body B", List.of(
+                        slot(ex, "Dumbbell Bench Press", tp),
+                        slot(ex, "Cable Row",            tp),
+                        slot(ex, "Leg Press",            tp),
+                        slot(ex, "Hip Thrust",           tp),
+                        slot(ex, "Overhead Press",       tp),
+                        slot(ex, "Triceps Pushdown",     tp)
                 )),
-                buildDay(null, 3, "Full Body C", List.of(
-                        slot(ex, "Barbell Bench Press",  4, 8, 10, "2 RIR", 120),
-                        slot(ex, "Dumbbell Row",         4, 8, 10, "2 RIR",  75),
-                        slot(ex, "Goblet Squat",         4, 10, 12, "2 RIR", 90),
-                        slot(ex, "Romanian Deadlift",    3, 8, 10, "2 RIR",  90),
-                        slot(ex, "Lateral Raise",        3, 12, 15, "3 RIR",  45),
-                        slot(ex, "Biceps Curl",          2, 10, 12, "2 RIR",  45)
+                buildDay(3, "Full Body C", List.of(
+                        slot(ex, "Barbell Bench Press", tp),
+                        slot(ex, "Dumbbell Row",        tp),
+                        slot(ex, "Goblet Squat",        tp),
+                        slot(ex, "Romanian Deadlift",   tp),
+                        slot(ex, "Lateral Raise",       tp),
+                        slot(ex, "Biceps Curl",         tp)
                 ))
         );
-        return plan(name, p, warning, days);
+        return plan("Full Body 3-Day (Intermediate)", p, warning, days, trainer);
     }
 
-    private WorkoutPlanDto buildPPL(FitnessProfile p, Map<String, Exercise> ex, String warning) {
-        String name = "Push / Pull / Legs";
+    private WorkoutPlanDto buildPPL(FitnessProfile p, Map<String, Exercise> ex,
+                                     String warning, TemplateParams tp,
+                                     TrainerPhilosophy trainer) {
         List<WorkoutDayDto> days = List.of(
-                buildDay(null, 1, "Push", List.of(
-                        slot(ex, "Barbell Bench Press", 4, 6, 8,  "2 RIR", 120),
-                        slot(ex, "Overhead Press",      3, 8, 10, "2 RIR",  90),
-                        slot(ex, "Chest Press Machine", 3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Lateral Raise",       4, 12, 15, "3 RIR",  45),
-                        slot(ex, "Triceps Pushdown",    3, 12, 15, "3 RIR",  45)
+                buildDay(1, "Push", List.of(
+                        slot(ex, "Barbell Bench Press", tp),
+                        slot(ex, "Overhead Press",      tp),
+                        slot(ex, "Chest Press Machine", tp),
+                        slot(ex, "Lateral Raise",       tp),
+                        slot(ex, "Triceps Pushdown",    tp)
                 )),
-                buildDay(null, 2, "Pull", List.of(
-                        slot(ex, "Lat Pulldown",    4, 8, 10,  "2 RIR",  90),
-                        slot(ex, "Cable Row",       3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Dumbbell Row",    3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Biceps Curl",     4, 10, 12, "2-3 RIR", 45),
-                        slot(ex, "Assisted Pull-up",2, 6, 10, "2 RIR",   90)
+                buildDay(2, "Pull", List.of(
+                        slot(ex, "Lat Pulldown",    tp),
+                        slot(ex, "Cable Row",       tp),
+                        slot(ex, "Dumbbell Row",    tp),
+                        slot(ex, "Biceps Curl",     tp),
+                        slot(ex, "Assisted Pull-up", tp)
                 )),
-                buildDay(null, 3, "Legs", List.of(
-                        slot(ex, "Leg Press",         4, 8, 10,  "2 RIR", 120),
-                        slot(ex, "Romanian Deadlift", 3, 8, 10,  "2 RIR",  90),
-                        slot(ex, "Leg Curl",          3, 10, 12, "2-3 RIR", 45),
-                        slot(ex, "Leg Extension",     3, 10, 12, "2-3 RIR", 45),
-                        slot(ex, "Hip Thrust",        3, 10, 12, "2-3 RIR", 60)
+                buildDay(3, "Legs", List.of(
+                        slot(ex, "Leg Press",         tp),
+                        slot(ex, "Romanian Deadlift", tp),
+                        slot(ex, "Leg Curl",          tp),
+                        slot(ex, "Leg Extension",     tp),
+                        slot(ex, "Hip Thrust",        tp)
                 ))
         );
-        return plan(name, p, warning, days);
+        return plan("Push / Pull / Legs", p, warning, days, trainer);
     }
 
-    private WorkoutPlanDto buildRegularUpperLower(FitnessProfile p, Map<String, Exercise> ex, String warning) {
-        int[] repRange = repRangeForGoal(p.getMainGoal());
-        int rest = restForGoal(p.getMainGoal());
+    private WorkoutPlanDto buildRegularUpperLower(FitnessProfile p, Map<String, Exercise> ex,
+                                                   String warning, TemplateParams tp,
+                                                   TrainerPhilosophy trainer) {
         String name = "Upper / Lower (" + labelForGoal(p.getMainGoal()) + ")";
-
         List<WorkoutDayDto> days = List.of(
-                buildDay(null, 1, "Upper A", List.of(
-                        slot(ex, "Barbell Bench Press",  4, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Lat Pulldown",         4, repRange[0], repRange[1], "2 RIR", rest - 15),
-                        slot(ex, "Overhead Press",       3, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Cable Row",            3, repRange[0], repRange[1], "2 RIR", rest - 15),
-                        slot(ex, "Lateral Raise",        3, 12, 15, "3 RIR", 45),
-                        slot(ex, "Biceps Curl",          3, 10, 12, "2 RIR", 45)
+                buildDay(1, "Upper A", List.of(
+                        slot(ex, "Barbell Bench Press", tp),
+                        slot(ex, "Lat Pulldown",        tp),
+                        slot(ex, "Overhead Press",      tp),
+                        slot(ex, "Cable Row",           tp),
+                        slot(ex, "Lateral Raise",       tp),
+                        slot(ex, "Biceps Curl",         tp)
                 )),
-                buildDay(null, 2, "Lower A", List.of(
-                        slot(ex, "Leg Press",         4, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Romanian Deadlift", 4, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Leg Curl",          3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Leg Extension",     3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Hip Thrust",        3, 10, 12, "2-3 RIR", 60)
+                buildDay(2, "Lower A", List.of(
+                        slot(ex, "Leg Press",         tp),
+                        slot(ex, "Romanian Deadlift", tp),
+                        slot(ex, "Leg Curl",          tp),
+                        slot(ex, "Leg Extension",     tp),
+                        slot(ex, "Hip Thrust",        tp)
                 )),
-                buildDay(null, 3, "Upper B", List.of(
-                        slot(ex, "Dumbbell Bench Press", 4, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Dumbbell Row",         4, repRange[0], repRange[1], "2 RIR", rest - 15),
-                        slot(ex, "Overhead Press",       3, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Lat Pulldown",         3, repRange[0], repRange[1], "2 RIR", rest - 15),
-                        slot(ex, "Lateral Raise",        4, 12, 15, "3 RIR", 45),
-                        slot(ex, "Triceps Pushdown",     3, 10, 12, "2 RIR", 45)
+                buildDay(3, "Upper B", List.of(
+                        slot(ex, "Dumbbell Bench Press", tp),
+                        slot(ex, "Dumbbell Row",         tp),
+                        slot(ex, "Overhead Press",       tp),
+                        slot(ex, "Lat Pulldown",         tp),
+                        slot(ex, "Lateral Raise",        tp),
+                        slot(ex, "Triceps Pushdown",     tp)
                 )),
-                buildDay(null, 4, "Lower B", List.of(
-                        slot(ex, "Leg Press",         4, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Romanian Deadlift", 3, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Goblet Squat",      3, 10, 12, "2-3 RIR", 75),
-                        slot(ex, "Leg Curl",          3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Hip Thrust",        4, 10, 12, "2-3 RIR", 60)
+                buildDay(4, "Lower B", List.of(
+                        slot(ex, "Leg Press",         tp),
+                        slot(ex, "Romanian Deadlift", tp),
+                        slot(ex, "Goblet Squat",      tp),
+                        slot(ex, "Leg Curl",          tp),
+                        slot(ex, "Hip Thrust",        tp)
                 ))
         );
-        return plan(name, p, warning, days);
+        return plan(name, p, warning, days, trainer);
     }
 
-    private WorkoutPlanDto buildPPLPartial(FitnessProfile p, Map<String, Exercise> ex, String warning, boolean isRegular) {
+    private WorkoutPlanDto buildPPLPartial(FitnessProfile p, Map<String, Exercise> ex,
+                                            String warning, boolean isRegular,
+                                            TemplateParams tp, TrainerPhilosophy trainer) {
         String name = isRegular ? "Push / Pull / Legs (4-Day)" : "PPL + Upper Intro";
         List<WorkoutDayDto> days = new ArrayList<>();
-
-        days.add(buildDay(null, 1, "Push", List.of(
-                slot(ex, "Barbell Bench Press", 4, 6, 10, "2 RIR", 120),
-                slot(ex, "Overhead Press",      3, 8, 10, "2 RIR",  90),
-                slot(ex, "Lateral Raise",       3, 12, 15, "3 RIR", 45),
-                slot(ex, "Triceps Pushdown",    3, 10, 12, "3 RIR", 45)
+        days.add(buildDay(1, "Push", List.of(
+                slot(ex, "Barbell Bench Press", tp),
+                slot(ex, "Overhead Press",      tp),
+                slot(ex, "Lateral Raise",       tp),
+                slot(ex, "Triceps Pushdown",    tp)
         )));
-        days.add(buildDay(null, 2, "Pull", List.of(
-                slot(ex, "Lat Pulldown",  4, 8, 10,  "2 RIR",  90),
-                slot(ex, "Cable Row",     3, 10, 12, "2-3 RIR", 60),
-                slot(ex, "Dumbbell Row",  3, 10, 12, "2-3 RIR", 60),
-                slot(ex, "Biceps Curl",   3, 10, 12, "2-3 RIR", 45)
+        days.add(buildDay(2, "Pull", List.of(
+                slot(ex, "Lat Pulldown",  tp),
+                slot(ex, "Cable Row",     tp),
+                slot(ex, "Dumbbell Row",  tp),
+                slot(ex, "Biceps Curl",   tp)
         )));
-        days.add(buildDay(null, 3, "Legs", List.of(
-                slot(ex, "Leg Press",         4, 8, 10,  "2 RIR", 120),
-                slot(ex, "Romanian Deadlift", 3, 8, 10,  "2 RIR",  90),
-                slot(ex, "Leg Curl",          3, 10, 12, "3 RIR",  45),
-                slot(ex, "Hip Thrust",        3, 10, 12, "3 RIR",  60)
+        days.add(buildDay(3, "Legs", List.of(
+                slot(ex, "Leg Press",         tp),
+                slot(ex, "Romanian Deadlift", tp),
+                slot(ex, "Leg Curl",          tp),
+                slot(ex, "Hip Thrust",        tp)
         )));
-        days.add(buildDay(null, 4, "Upper", List.of(
-                slot(ex, "Dumbbell Bench Press", 3, 10, 12, "2-3 RIR", 75),
-                slot(ex, "Dumbbell Row",         3, 10, 12, "2-3 RIR", 60),
-                slot(ex, "Overhead Press",       3, 10, 12, "2-3 RIR", 75),
-                slot(ex, "Lateral Raise",        3, 12, 15, "3 RIR",   45),
-                slot(ex, "Biceps Curl",          2, 12, 15, "3 RIR",   45)
+        days.add(buildDay(4, "Upper", List.of(
+                slot(ex, "Dumbbell Bench Press", tp),
+                slot(ex, "Dumbbell Row",         tp),
+                slot(ex, "Overhead Press",       tp),
+                slot(ex, "Lateral Raise",        tp),
+                slot(ex, "Biceps Curl",          tp)
         )));
-
-        return plan(name, p, warning, days);
+        return plan(name, p, warning, days, trainer);
     }
 
-    private WorkoutPlanDto buildPPLPlusUpperLower(FitnessProfile p, Map<String, Exercise> ex, String warning) {
-        String name = "PPL + Upper / Lower (5-Day)";
+    private WorkoutPlanDto buildPPLPlusUpperLower(FitnessProfile p, Map<String, Exercise> ex,
+                                                   String warning, TemplateParams tp,
+                                                   TrainerPhilosophy trainer) {
         List<WorkoutDayDto> days = List.of(
-                buildDay(null, 1, "Push", List.of(
-                        slot(ex, "Barbell Bench Press", 4, 6, 8,  "2 RIR", 120),
-                        slot(ex, "Overhead Press",      3, 8, 10, "2 RIR",  90),
-                        slot(ex, "Chest Press Machine", 3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Lateral Raise",       4, 12, 15, "3 RIR",  45),
-                        slot(ex, "Triceps Pushdown",    3, 10, 12, "3 RIR",  45)
+                buildDay(1, "Push", List.of(
+                        slot(ex, "Barbell Bench Press", tp),
+                        slot(ex, "Overhead Press",      tp),
+                        slot(ex, "Chest Press Machine", tp),
+                        slot(ex, "Lateral Raise",       tp),
+                        slot(ex, "Triceps Pushdown",    tp)
                 )),
-                buildDay(null, 2, "Pull", List.of(
-                        slot(ex, "Lat Pulldown",    4, 6, 10,  "2 RIR",  90),
-                        slot(ex, "Cable Row",       3, 8, 10,  "2 RIR",  75),
-                        slot(ex, "Dumbbell Row",    3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Assisted Pull-up",2, 5, 10, "2 RIR",   90),
-                        slot(ex, "Biceps Curl",     4, 10, 12, "2-3 RIR", 45)
+                buildDay(2, "Pull", List.of(
+                        slot(ex, "Lat Pulldown",    tp),
+                        slot(ex, "Cable Row",       tp),
+                        slot(ex, "Dumbbell Row",    tp),
+                        slot(ex, "Assisted Pull-up", tp),
+                        slot(ex, "Biceps Curl",     tp)
                 )),
-                buildDay(null, 3, "Legs", List.of(
-                        slot(ex, "Leg Press",         4, 8, 10,  "2 RIR", 120),
-                        slot(ex, "Romanian Deadlift", 4, 8, 10,  "2 RIR",  90),
-                        slot(ex, "Leg Curl",          3, 10, 12, "2-3 RIR", 45),
-                        slot(ex, "Leg Extension",     3, 10, 12, "2-3 RIR", 45),
-                        slot(ex, "Hip Thrust",        3, 10, 12, "2-3 RIR", 60)
+                buildDay(3, "Legs", List.of(
+                        slot(ex, "Leg Press",         tp),
+                        slot(ex, "Romanian Deadlift", tp),
+                        slot(ex, "Leg Curl",          tp),
+                        slot(ex, "Leg Extension",     tp),
+                        slot(ex, "Hip Thrust",        tp)
                 )),
-                buildDay(null, 4, "Upper", List.of(
-                        slot(ex, "Dumbbell Bench Press", 4, 8, 10,  "2 RIR",  90),
-                        slot(ex, "Lat Pulldown",         4, 8, 10,  "2 RIR",  75),
-                        slot(ex, "Overhead Press",       3, 8, 10,  "2 RIR",  90),
-                        slot(ex, "Dumbbell Row",         3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Lateral Raise",        3, 12, 15, "3 RIR",   45)
+                buildDay(4, "Upper", List.of(
+                        slot(ex, "Dumbbell Bench Press", tp),
+                        slot(ex, "Lat Pulldown",         tp),
+                        slot(ex, "Overhead Press",       tp),
+                        slot(ex, "Dumbbell Row",         tp),
+                        slot(ex, "Lateral Raise",        tp)
                 )),
-                buildDay(null, 5, "Lower", List.of(
-                        slot(ex, "Leg Press",         4, 8, 10,  "2 RIR", 120),
-                        slot(ex, "Romanian Deadlift", 3, 8, 10,  "2 RIR",  90),
-                        slot(ex, "Goblet Squat",      3, 10, 12, "2-3 RIR", 75),
-                        slot(ex, "Leg Curl",          3, 10, 12, "2-3 RIR", 45),
-                        slot(ex, "Hip Thrust",        4, 10, 12, "2-3 RIR", 60)
+                buildDay(5, "Lower", List.of(
+                        slot(ex, "Leg Press",         tp),
+                        slot(ex, "Romanian Deadlift", tp),
+                        slot(ex, "Goblet Squat",      tp),
+                        slot(ex, "Leg Curl",          tp),
+                        slot(ex, "Hip Thrust",        tp)
                 ))
         );
-        return plan(name, p, warning, days);
+        return plan("PPL + Upper / Lower (5-Day)", p, warning, days, trainer);
     }
 
-    private WorkoutPlanDto buildRegularUpperLowerX5(FitnessProfile p, Map<String, Exercise> ex, String warning) {
-        int[] repRange = repRangeForGoal(p.getMainGoal());
-        int rest = restForGoal(p.getMainGoal());
-        String name = "Upper / Lower × 5 (High Frequency)";
-
+    private WorkoutPlanDto buildRegularUpperLowerX5(FitnessProfile p, Map<String, Exercise> ex,
+                                                     String warning, TemplateParams tp,
+                                                     TrainerPhilosophy trainer) {
         List<WorkoutDayDto> days = List.of(
-                buildDay(null, 1, "Upper A", List.of(
-                        slot(ex, "Barbell Bench Press",  4, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Lat Pulldown",         4, repRange[0], repRange[1], "2 RIR", rest - 15),
-                        slot(ex, "Overhead Press",       3, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Cable Row",            3, repRange[0], repRange[1], "2 RIR", rest - 15),
-                        slot(ex, "Lateral Raise",        3, 12, 15, "3 RIR", 45)
+                buildDay(1, "Upper A", List.of(
+                        slot(ex, "Barbell Bench Press", tp),
+                        slot(ex, "Lat Pulldown",        tp),
+                        slot(ex, "Overhead Press",      tp),
+                        slot(ex, "Cable Row",           tp),
+                        slot(ex, "Lateral Raise",       tp)
                 )),
-                buildDay(null, 2, "Lower A", List.of(
-                        slot(ex, "Leg Press",         4, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Romanian Deadlift", 4, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Leg Curl",          3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Hip Thrust",        3, 10, 12, "2-3 RIR", 60)
+                buildDay(2, "Lower A", List.of(
+                        slot(ex, "Leg Press",         tp),
+                        slot(ex, "Romanian Deadlift", tp),
+                        slot(ex, "Leg Curl",          tp),
+                        slot(ex, "Hip Thrust",        tp)
                 )),
-                buildDay(null, 3, "Upper B", List.of(
-                        slot(ex, "Dumbbell Bench Press", 4, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Dumbbell Row",         4, repRange[0], repRange[1], "2 RIR", rest - 15),
-                        slot(ex, "Overhead Press",       3, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Lat Pulldown",         3, repRange[0], repRange[1], "2 RIR", rest - 15),
-                        slot(ex, "Triceps Pushdown",     3, 10, 12, "2 RIR", 45)
+                buildDay(3, "Upper B", List.of(
+                        slot(ex, "Dumbbell Bench Press", tp),
+                        slot(ex, "Dumbbell Row",         tp),
+                        slot(ex, "Overhead Press",       tp),
+                        slot(ex, "Lat Pulldown",         tp),
+                        slot(ex, "Triceps Pushdown",     tp)
                 )),
-                buildDay(null, 4, "Lower B", List.of(
-                        slot(ex, "Leg Press",         4, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Romanian Deadlift", 3, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Goblet Squat",      3, 10, 12, "2-3 RIR", 75),
-                        slot(ex, "Leg Extension",     3, 10, 12, "2-3 RIR", 60),
-                        slot(ex, "Hip Thrust",        4, 10, 12, "2-3 RIR", 60)
+                buildDay(4, "Lower B", List.of(
+                        slot(ex, "Leg Press",         tp),
+                        slot(ex, "Romanian Deadlift", tp),
+                        slot(ex, "Goblet Squat",      tp),
+                        slot(ex, "Leg Extension",     tp),
+                        slot(ex, "Hip Thrust",        tp)
                 )),
-                buildDay(null, 5, "Upper C", List.of(
-                        slot(ex, "Chest Press Machine", 3, repRange[0], repRange[1], "2 RIR", rest),
-                        slot(ex, "Cable Row",           3, repRange[0], repRange[1], "2 RIR", rest - 15),
-                        slot(ex, "Lateral Raise",       4, 12, 15, "3 RIR", 45),
-                        slot(ex, "Biceps Curl",         3, 10, 12, "2 RIR", 45),
-                        slot(ex, "Triceps Pushdown",    3, 10, 12, "2 RIR", 45)
+                buildDay(5, "Upper C", List.of(
+                        slot(ex, "Chest Press Machine", tp),
+                        slot(ex, "Cable Row",           tp),
+                        slot(ex, "Lateral Raise",       tp),
+                        slot(ex, "Biceps Curl",         tp),
+                        slot(ex, "Triceps Pushdown",    tp)
                 ))
         );
-        return plan(name, p, warning, days);
+        return plan("Upper / Lower × 5 (High Frequency)", p, warning, days, trainer);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
 
-    private WorkoutPlanDto plan(String name, FitnessProfile p, String warning, List<WorkoutDayDto> days) {
+    private WorkoutPlanDto plan(String baseName, FitnessProfile p, String warning,
+                                 List<WorkoutDayDto> days, TrainerPhilosophy trainer) {
+        String name = baseName + " · " + trainer.getDisplayName();
         return new WorkoutPlanDto(
-                UUID.randomUUID(), // preview id — replaced with DB id on save
+                UUID.randomUUID(),
                 name,
                 p.getMainGoal(),
                 p.getTrainingDaysPerWeek(),
                 false,
                 warning,
-                days
+                days,
+                trainer.getId(),
+                trainer.getDisplayName()
         );
     }
 
-    private WorkoutDayDto buildDay(UUID planId, int dayNumber, String workoutName,
-                                   List<WorkoutExerciseDto> exercises) {
+    private WorkoutDayDto buildDay(int dayNumber, String workoutName, List<WorkoutExerciseDto> exercises) {
         return new WorkoutDayDto(UUID.randomUUID(), dayNumber, workoutName, exercises);
     }
 
-    private WorkoutExerciseDto slot(Map<String, Exercise> exercises, String name,
-                                    int sets, int repMin, int repMax,
-                                    String rirGuidance, int restSeconds) {
+    /** Auto-detects compound vs isolation by MovementPattern and applies trainer params accordingly. */
+    private WorkoutExerciseDto slot(Map<String, Exercise> exercises, String name, TemplateParams tp) {
         Exercise exercise = exercises.get(name);
         if (exercise == null) {
             throw new IllegalStateException("Exercise not found in library: " + name);
         }
+        boolean isolation = exercise.getMovementPattern() == MovementPattern.ISOLATION;
         return new WorkoutExerciseDto(
-                UUID.randomUUID(), // preview id
-                0, // orderIndex set when building plan — assigned by position in list
-                sets, repMin, repMax, rirGuidance, restSeconds,
+                UUID.randomUUID(),
+                0,
+                isolation ? tp.iSets()   : tp.cSets(),
+                isolation ? tp.iRepMin() : tp.cRepMin(),
+                isolation ? tp.iRepMax() : tp.cRepMax(),
+                isolation ? tp.iRir()    : tp.cRir(),
+                isolation ? tp.iRest()   : tp.cRest(),
                 ExerciseDto.from(exercise)
         );
     }
 
-    private int[] repRangeForGoal(MainGoal goal) {
-        return switch (goal) {
-            case STRENGTH  -> new int[]{5, 8};
-            case FAT_LOSS  -> new int[]{12, 15};
-            default        -> new int[]{8, 12}; // MUSCLE_GAIN, GENERAL_FITNESS
-        };
-    }
-
-    private int restForGoal(MainGoal goal) {
-        return switch (goal) {
-            case STRENGTH  -> 180;
-            case FAT_LOSS  -> 60;
-            default        -> 90;
-        };
+    private boolean isBeginner(FitnessProfile profile) {
+        return profile.getTrainingBackground() == TrainingBackground.STARTING
+                || profile.getTrainingBackground() == TrainingBackground.RETURNING;
     }
 
     private String labelForGoal(MainGoal goal) {
         return switch (goal) {
-            case STRENGTH       -> "Strength Focus";
-            case FAT_LOSS       -> "Fat Loss Focus";
-            case MUSCLE_GAIN    -> "Muscle Gain Focus";
+            case STRENGTH        -> "Strength Focus";
+            case FAT_LOSS        -> "Fat Loss Focus";
+            case MUSCLE_GAIN     -> "Muscle Gain Focus";
             case GENERAL_FITNESS -> "General Fitness";
         };
     }

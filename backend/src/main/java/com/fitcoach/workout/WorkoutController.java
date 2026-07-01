@@ -15,7 +15,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/plan")
@@ -30,9 +33,11 @@ public class WorkoutController {
     }
 
     @GetMapping("/options")
-    @Operation(summary = "Generate recommended and alternative plan options from the user's profile")
-    public PlanOptionsResponse getPlanOptions(@AuthenticationPrincipal CurrentUser currentUser) {
-        return planService.getPlanOptions(currentUser);
+    @Operation(summary = "Generate plan options from the user's profile; optionally shaped by a trainer philosophy")
+    public PlanOptionsResponse getPlanOptions(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @RequestParam(required = false) UUID trainerId) {
+        return planService.getPlanOptions(currentUser, trainerId);
     }
 
     @PostMapping("/select")

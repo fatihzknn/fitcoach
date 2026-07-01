@@ -13,7 +13,9 @@ public record WorkoutPlanDto(
         int trainingDaysPerWeek,
         boolean isActive,
         String sustainabilityWarning,
-        List<WorkoutDayDto> days
+        List<WorkoutDayDto> days,
+        UUID trainerPhilosophyId,
+        String trainerPhilosophyName
 ) {
     public static WorkoutPlanDto from(WorkoutPlan plan) {
         return new WorkoutPlanDto(
@@ -23,7 +25,9 @@ public record WorkoutPlanDto(
                 plan.getTrainingDaysPerWeek(),
                 plan.isActive(),
                 plan.getSustainabilityWarning(),
-                plan.getDays().stream().map(WorkoutDayDto::from).toList()
+                plan.getDays().stream().map(WorkoutDayDto::from).toList(),
+                plan.getTrainerPhilosophyId(),
+                plan.getTrainerPhilosophyName()
         );
     }
 }
