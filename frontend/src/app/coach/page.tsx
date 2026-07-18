@@ -5,6 +5,7 @@ import { Send, Bot } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { api, ApiError, type ChatMessageDto } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 // ─── Message bubble ───────────────────────────────────────────────────────────
 
@@ -44,6 +45,7 @@ const SUGGESTIONS = [
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CoachPage() {
+  const { t } = useI18n();
   const [messages, setMessages] = React.useState<ChatMessageDto[]>([]);
   const [input, setInput] = React.useState("");
   const [sending, setSending] = React.useState(false);
@@ -91,7 +93,7 @@ export default function CoachPage() {
     } catch (err) {
       // Remove optimistic message on failure
       setMessages((prev) => prev.filter((m) => m.id !== optimisticUser.id));
-      setError(err instanceof ApiError ? err.message : "Couldn't send. Try again.");
+      setError(err instanceof ApiError ? err.message : t("Couldn't send. Try again."));
     } finally {
       setSending(false);
       inputRef.current?.focus();
@@ -112,10 +114,10 @@ export default function CoachPage() {
       {/* Header */}
       <div className="mb-4">
         <p className="text-sm font-medium uppercase tracking-[0.18em] text-muted-foreground">
-          Your
+          {t("Your")}
         </p>
         <h1 className="font-display text-4xl font-extrabold leading-tight tracking-tight">
-          Coach
+          {t("Coach")}
         </h1>
       </div>
 
@@ -144,14 +146,13 @@ export default function CoachPage() {
                   <Bot className="h-5 w-5 text-primary" />
                 </div>
                 <div className="rounded-2xl rounded-bl-sm border border-border bg-card px-4 py-3 text-sm leading-relaxed max-w-[80%]">
-                  Hey! I&apos;m your FitCoach AI. Ask me anything about your
-                  training, recovery, technique, or staying consistent.
+                  {t("Hey! I'm your FitCoach AI. Ask me anything about your training, recovery, technique, or staying consistent.")}
                 </div>
               </div>
 
               {/* Suggestion chips */}
               <div className="space-y-2">
-                <p className="text-xs text-muted-foreground px-1">Try asking:</p>
+                <p className="text-xs text-muted-foreground px-1">{t("Try asking:")}</p>
                 <div className="flex flex-wrap gap-2">
                   {SUGGESTIONS.map((s) => (
                     <button
@@ -159,7 +160,7 @@ export default function CoachPage() {
                       onClick={() => void send(s)}
                       className="rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground hover:border-primary/60 hover:text-foreground transition-colors"
                     >
-                      {s}
+                      {t(s)}
                     </button>
                   ))}
                 </div>
@@ -204,7 +205,7 @@ export default function CoachPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask your coach anything…"
+            placeholder={t("Ask your coach anything…")}
             disabled={sending}
             className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
             style={{ maxHeight: "120px", overflowY: "auto" }}
@@ -221,8 +222,7 @@ export default function CoachPage() {
 
         {/* Safety disclaimer */}
         <p className="mt-2 text-center text-[10px] text-muted-foreground/60 leading-relaxed">
-          FitCoach AI cannot diagnose injuries or provide medical advice.
-          If you are in pain, consult a healthcare professional.
+          {t("FitCoach AI cannot diagnose injuries or provide medical advice. If you are in pain, consult a healthcare professional.")}
         </p>
       </div>
     </AppShell>

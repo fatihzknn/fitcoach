@@ -27,6 +27,7 @@ import {
   type TrainingBackground,
 } from "@/lib/api";
 import { session } from "@/lib/session";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 const TOTAL_STEPS = 6;
@@ -45,6 +46,7 @@ interface Draft {
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [step, setStep] = React.useState(0);
   const [draft, setDraft] = React.useState<Draft>({
     age: "",
@@ -89,12 +91,12 @@ export default function OnboardingPage() {
     const age = Number(draft.age);
     const height = Number(draft.heightCm);
     const weight = Number(draft.weightKg);
-    if (!draft.age || age < 13 || age > 100) return "Enter a valid age (13-100).";
+    if (!draft.age || age < 13 || age > 100) return t("Enter a valid age (13-100).");
     if (!draft.heightCm || height < 120 || height > 230)
-      return "Enter a valid height in cm (120-230).";
+      return t("Enter a valid height in cm (120-230).");
     if (!draft.weightKg || weight < 30 || weight > 300)
-      return "Enter a valid weight in kg (30-300).";
-    if (!draft.sex) return "Select your sex.";
+      return t("Enter a valid weight in kg (30-300).");
+    if (!draft.sex) return t("Select your sex.");
     return null;
   }
 
@@ -120,7 +122,7 @@ export default function OnboardingPage() {
       session.setOnboarded();
       router.replace("/plan-selection");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not save. Please try again.");
+      setError(err instanceof ApiError ? err.message : t("Could not save. Please try again."));
       setSubmitting(false);
     }
   }
@@ -153,7 +155,7 @@ export default function OnboardingPage() {
       </div>
 
       <h1 className="mt-8 font-display text-2xl font-bold tracking-tight">
-        {STEP_TITLES[step] ?? ""}
+        {t(STEP_TITLES[step] ?? "")}
       </h1>
 
       <div className="mt-6 flex-1 animate-fade-up" key={step}>
@@ -162,8 +164,8 @@ export default function OnboardingPage() {
             {GOAL_OPTIONS.map((o) => (
               <OptionCard
                 key={o.value}
-                label={o.label}
-                hint={o.hint}
+                label={t(o.label)}
+                hint={t(o.hint)}
                 selected={draft.mainGoal === o.value}
                 onSelect={() => choose("mainGoal", o.value)}
               />
@@ -176,8 +178,8 @@ export default function OnboardingPage() {
             {BACKGROUND_OPTIONS.map((o) => (
               <OptionCard
                 key={o.value}
-                label={o.label}
-                hint={o.hint}
+                label={t(o.label)}
+                hint={t(o.hint)}
                 selected={draft.trainingBackground === o.value}
                 onSelect={() => choose("trainingBackground", o.value)}
               />
@@ -190,8 +192,8 @@ export default function OnboardingPage() {
             {DAYS_OPTIONS.map((o) => (
               <OptionCard
                 key={o.value}
-                label={o.label}
-                hint={o.hint}
+                label={t(o.label)}
+                hint={t(o.hint)}
                 selected={draft.trainingDaysPerWeek === o.value}
                 onSelect={() => choose("trainingDaysPerWeek", o.value)}
               />
@@ -204,8 +206,8 @@ export default function OnboardingPage() {
             {DURATION_OPTIONS.map((o) => (
               <OptionCard
                 key={o.value}
-                label={o.label}
-                hint={o.hint}
+                label={t(o.label)}
+                hint={t(o.hint)}
                 selected={draft.sessionDurationMinutes === o.value}
                 onSelect={() => choose("sessionDurationMinutes", o.value)}
               />
@@ -217,7 +219,7 @@ export default function OnboardingPage() {
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="age">Age</Label>
+                <Label htmlFor="age">{t("Age")}</Label>
                 <Input
                   id="age"
                   inputMode="numeric"
@@ -226,7 +228,7 @@ export default function OnboardingPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="height">Height (cm)</Label>
+                <Label htmlFor="height">{t("Height (cm)")}</Label>
                 <Input
                   id="height"
                   inputMode="numeric"
@@ -236,7 +238,7 @@ export default function OnboardingPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="weight">Weight (kg)</Label>
+              <Label htmlFor="weight">{t("Weight (kg)")}</Label>
               <Input
                 id="weight"
                 inputMode="decimal"
@@ -245,7 +247,7 @@ export default function OnboardingPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Sex</Label>
+              <Label>{t("Sex")}</Label>
               <div className="grid grid-cols-3 gap-3">
                 {SEX_OPTIONS.map((o) => (
                   <button
@@ -260,7 +262,7 @@ export default function OnboardingPage() {
                         : "border-border bg-card hover:bg-elevated",
                     )}
                   >
-                    {o.label}
+                    {t(o.label)}
                   </button>
                 ))}
               </div>
@@ -271,12 +273,12 @@ export default function OnboardingPage() {
         {step === 5 && (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Select all that apply. This keeps risky movements out of your plan.
+              {t("Select all that apply. This keeps risky movements out of your plan.")}
             </p>
             {PAIN_OPTIONS.map((o) => (
               <OptionCard
                 key={o.value}
-                label={o.label}
+                label={t(o.label)}
                 selected={draft.painAreas.includes(o.value)}
                 onSelect={() => togglePain(o.value)}
               />
@@ -301,13 +303,13 @@ export default function OnboardingPage() {
             else next();
           }}
         >
-          Continue
+          {t("Continue")}
         </Button>
       )}
 
       {step === 5 && (
         <Button className="mt-6 w-full" size="lg" onClick={submit} disabled={submitting}>
-          {submitting ? "Building your plan..." : "Finish setup"}
+          {submitting ? t("Building your plan...") : t("Finish setup")}
         </Button>
       )}
     </main>

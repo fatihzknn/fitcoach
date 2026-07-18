@@ -3,6 +3,7 @@
 import * as React from "react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 type Status = "checking" | "online" | "offline";
 
@@ -11,6 +12,7 @@ type Status = "checking" | "online" | "offline";
  * Doubles as the Phase 1 frontend-to-backend connectivity test surfaced in the UI.
  */
 export function BackendStatus({ className }: { className?: string }) {
+  const { t } = useI18n();
   const [status, setStatus] = React.useState<Status>("checking");
   const [version, setVersion] = React.useState<string | null>(null);
 
@@ -31,10 +33,10 @@ export function BackendStatus({ className }: { className?: string }) {
 
   const label =
     status === "checking"
-      ? "Checking backend…"
+      ? t("Checking backend…")
       : status === "online"
-        ? `Backend online${version ? ` · v${version}` : ""}`
-        : "Backend offline";
+        ? `${t("Backend online")}${version ? ` · v${version}` : ""}`
+        : t("Backend offline");
 
   const dot =
     status === "online"

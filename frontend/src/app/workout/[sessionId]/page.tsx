@@ -26,18 +26,20 @@ import {
   type ExerciseHistoryEntryDto,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mini SVG progress chart (exercise history)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ExerciseProgressChart({ entries }: { entries: ExerciseHistoryEntryDto[] }) {
+  const { t } = useI18n();
   const valid = entries.filter((e) => e.maxWeightKg !== null) as (ExerciseHistoryEntryDto & { maxWeightKg: number })[];
 
   if (valid.length < 2) {
     return (
       <p className="py-4 text-center text-sm text-muted-foreground">
-        Log at least 2 sessions to see your progression chart.
+        {t("Log at least 2 sessions to see your progression chart.")}
       </p>
     );
   }
@@ -85,7 +87,7 @@ function ExerciseProgressChart({ entries }: { entries: ExerciseHistoryEntryDto[]
       </svg>
       <div className="flex justify-between text-xs text-muted-foreground/60 px-1">
         <span>{first.entry.sessionDate.slice(5)}</span>
-        <span>{last.entry.maxWeightKg} kg · {last.entry.bestReps} reps</span>
+        <span>{last.entry.maxWeightKg} kg · {last.entry.bestReps} {t("reps")}</span>
         <span>{last.entry.sessionDate.slice(5)}</span>
       </div>
     </div>
@@ -104,6 +106,7 @@ interface HistorySheetProps {
 }
 
 function HistorySheet({ exerciseName, entries, loading, onClose }: HistorySheetProps) {
+  const { t } = useI18n();
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={onClose}>
       <div
@@ -113,7 +116,7 @@ function HistorySheet({ exerciseName, entries, loading, onClose }: HistorySheetP
         <div className="flex items-center justify-between">
           <div>
             <h2 className="font-display text-lg font-bold">{exerciseName}</h2>
-            <p className="text-xs text-muted-foreground">Strength progression</p>
+            <p className="text-xs text-muted-foreground">{t("Strength progression")}</p>
           </div>
           <button onClick={onClose} className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-elevated">
             <X className="h-4 w-4" />
@@ -133,8 +136,8 @@ function HistorySheet({ exerciseName, entries, loading, onClose }: HistorySheetP
               <div key={i} className="flex items-center justify-between rounded-lg bg-elevated px-3 py-2">
                 <span className="text-xs text-muted-foreground">{e.sessionDate}</span>
                 <span className="text-xs font-medium">
-                  {e.maxWeightKg ? `${e.maxWeightKg} kg` : "BW"} × {e.bestReps} reps
-                  <span className="text-muted-foreground"> ({e.totalSets} sets)</span>
+                  {e.maxWeightKg ? `${e.maxWeightKg} kg` : t("BW")} × {e.bestReps} {t("reps")}
+                  <span className="text-muted-foreground"> ({e.totalSets} {t("sets")})</span>
                 </span>
               </div>
             ))}
@@ -143,7 +146,7 @@ function HistorySheet({ exerciseName, entries, loading, onClose }: HistorySheetP
 
         {!loading && entries.length === 0 && (
           <p className="py-4 text-center text-sm text-muted-foreground">
-            No history yet — log this exercise to start tracking.
+            {t("No history yet — log this exercise to start tracking.")}
           </p>
         )}
       </div>
@@ -163,6 +166,7 @@ interface RestTimerProps {
 }
 
 function RestTimer({ remaining, total, exerciseName, onDismiss }: RestTimerProps) {
+  const { t } = useI18n();
   const mins = Math.floor(remaining / 60);
   const secs = remaining % 60;
   const progress = (total - remaining) / total;
@@ -179,14 +183,14 @@ function RestTimer({ remaining, total, exerciseName, onDismiss }: RestTimerProps
 
       <div className="flex flex-col min-w-[72px]">
         {isDone ? (
-          <span className="text-sm font-semibold">Rest complete!</span>
+          <span className="text-sm font-semibold">{t("Rest complete!")}</span>
         ) : (
           <>
             <span className="font-mono text-base font-bold leading-none">
               {mins}:{String(secs).padStart(2, "0")}
             </span>
             <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
-              rest · {exerciseName}
+              {t("rest")} · {exerciseName}
             </span>
           </>
         )}
@@ -203,7 +207,7 @@ function RestTimer({ remaining, total, exerciseName, onDismiss }: RestTimerProps
       <button
         onClick={onDismiss}
         className="h-6 w-6 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
-        aria-label="Dismiss timer"
+        aria-label={t("Dismiss timer")}
       >
         <X className="h-3.5 w-3.5" />
       </button>
@@ -236,6 +240,7 @@ function SetRow({
   onLog,
   disabled,
 }: SetRowProps) {
+  const { t } = useI18n();
   const [weight, setWeight] = React.useState(
     logged?.weightKg ?? previous?.weightKg?.toString() ?? "",
   );
@@ -263,12 +268,12 @@ function SetRow({
         </p>
         {isPr && isDone && (
           <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400">
-            ↑ Best
+            {t("↑ Best")}
           </span>
         )}
         {!isPr && previous && (
           <p className="text-xs text-muted-foreground/55">
-            Last: {previous.weightKg ?? "BW"} kg × {previous.repsCompleted}
+            {t("Last:")} {previous.weightKg ?? t("BW")} kg × {previous.repsCompleted}
           </p>
         )}
       </div>
@@ -284,7 +289,7 @@ function SetRow({
         />
         <Input
           inputMode="numeric"
-          placeholder="reps"
+          placeholder={t("reps")}
           value={reps}
           onChange={(e) => setReps(e.target.value)}
           disabled={disabled}
@@ -303,7 +308,7 @@ function SetRow({
           "disabled:opacity-40 disabled:cursor-not-allowed",
         )}
       >
-        {isDone ? <RefreshCw className="h-3.5 w-3.5" /> : "Log"}
+        {isDone ? <RefreshCw className="h-3.5 w-3.5" /> : t("Log")}
       </button>
     </div>
   );
@@ -336,6 +341,7 @@ function ExerciseBlock({
   onShowHistory,
   disabled,
 }: ExerciseBlockProps) {
+  const { t } = useI18n();
   const display = swappedExercise ?? we.exercise;
   const sets = Array.from({ length: we.sets }, (_, i) => i + 1);
   const doneCount = sets.filter((n) => loggedSets.has(`${we.id}:${n}`)).length;
@@ -354,24 +360,24 @@ function ExerciseBlock({
             {swappedExercise && (
               <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary">
                 <RefreshCw className="h-2.5 w-2.5" />
-                swapped
+                {t("swapped")}
               </span>
             )}
             <button
               onClick={() => onShowHistory(we.exercise.id, display.name)}
               className="text-muted-foreground hover:text-primary transition-colors"
-              title="View progression"
-              aria-label="View exercise progression"
+              title={t("View progression")}
+              aria-label={t("View exercise progression")}
             >
               <TrendingUp className="h-3.5 w-3.5" />
             </button>
           </div>
           <p className="text-xs text-muted-foreground">
-            {display.primaryMuscleGroup.replace(/_/g, " ")} · {doneCount}/{we.sets} sets done
+            {t(display.primaryMuscleGroup)} · {doneCount}/{we.sets} {t("sets done")}
           </p>
           {swappedExercise && (
             <p className="text-xs text-muted-foreground/55">
-              Originally: {we.exercise.name}
+              {t("Originally:")} {we.exercise.name}
             </p>
           )}
         </div>
@@ -381,7 +387,7 @@ function ExerciseBlock({
           className="flex flex-shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
         >
           <RefreshCw className="h-3.5 w-3.5" />
-          Swap
+          {t("Swap")}
         </button>
       </div>
 
@@ -407,7 +413,7 @@ function ExerciseBlock({
 
       {display.formCue && (
         <p className="text-xs text-muted-foreground/70 italic px-1">
-          Tip: {display.formCue}
+          {t("Tip:")} {display.formCue}
         </p>
       )}
     </div>
@@ -435,6 +441,7 @@ interface SwapFlowProps {
 }
 
 function SwapFlow({ we, onConfirm, onClose }: SwapFlowProps) {
+  const { t } = useI18n();
   const [step, setStep] = React.useState<SwapStep>("reason");
 
   function handleReason(value: string) {
@@ -455,7 +462,7 @@ function SwapFlow({ we, onConfirm, onClose }: SwapFlowProps) {
           <>
             <div className="flex items-center justify-between">
               <h2 className="font-display text-lg font-bold">
-                Why can&apos;t you do {we.exercise.name}?
+                {t("Why can't you do {name}?", { name: we.exercise.name })}
               </h2>
               <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl leading-none">✕</button>
             </div>
@@ -466,7 +473,7 @@ function SwapFlow({ we, onConfirm, onClose }: SwapFlowProps) {
                   onClick={() => handleReason(r.value)}
                   className="flex w-full items-center justify-between rounded-xl border border-border bg-elevated px-4 py-3.5 text-left hover:bg-secondary transition-colors"
                 >
-                  <span className="text-sm font-medium">{r.label}</span>
+                  <span className="text-sm font-medium">{t(r.label)}</span>
                   <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 </button>
               ))}
@@ -480,23 +487,23 @@ function SwapFlow({ we, onConfirm, onClose }: SwapFlowProps) {
               <button onClick={() => setStep("reason")} className="text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="h-4 w-4" />
               </button>
-              <h2 className="font-display text-lg font-bold">Pain safety notice</h2>
+              <h2 className="font-display text-lg font-bold">{t("Pain safety notice")}</h2>
             </div>
             <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-4 space-y-2">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0" />
-                <p className="font-semibold text-sm text-amber-400">Important</p>
+                <p className="font-semibold text-sm text-amber-400">{t("Important")}</p>
               </div>
               <p className="text-sm text-amber-400/90 leading-relaxed">
-                Never push through pain. If you experience sharp, sudden, or severe pain, stop immediately.
+                {t("Never push through pain. If you experience sharp, sudden, or severe pain, stop immediately.")}
               </p>
               <p className="text-xs text-muted-foreground leading-relaxed pt-1">
-                FitCoach cannot diagnose injuries. When in doubt, rest and seek professional evaluation.
+                {t("FitCoach cannot diagnose injuries. When in doubt, rest and seek professional evaluation.")}
               </p>
             </div>
             <div className="flex gap-3">
-              <Button variant="secondary" className="flex-1" onClick={onClose}>Stop for today</Button>
-              <Button className="flex-1" onClick={() => setStep("alternatives")}>Show alternatives</Button>
+              <Button variant="secondary" className="flex-1" onClick={onClose}>{t("Stop for today")}</Button>
+              <Button className="flex-1" onClick={() => setStep("alternatives")}>{t("Show alternatives")}</Button>
             </div>
           </>
         )}
@@ -507,10 +514,10 @@ function SwapFlow({ we, onConfirm, onClose }: SwapFlowProps) {
               <button onClick={() => setStep("reason")} className="text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="h-4 w-4" />
               </button>
-              <h2 className="font-display text-lg font-bold">Pick a replacement</h2>
+              <h2 className="font-display text-lg font-bold">{t("Pick a replacement")}</h2>
             </div>
             {we.exercise.alternatives.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No alternatives recorded yet.</p>
+              <p className="text-sm text-muted-foreground py-4 text-center">{t("No alternatives recorded yet.")}</p>
             ) : (
               <div className="space-y-2">
                 {we.exercise.alternatives.map((alt) => (
@@ -522,7 +529,7 @@ function SwapFlow({ we, onConfirm, onClose }: SwapFlowProps) {
                     <div>
                       <p className="font-medium text-sm">{alt.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {alt.primaryMuscleGroup.replace(/_/g, " ")} · {alt.difficultyLevel.toLowerCase()}
+                        {t(alt.primaryMuscleGroup)} · {t(alt.difficultyLevel)}
                       </p>
                     </div>
                     <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
@@ -544,6 +551,7 @@ function SwapFlow({ we, onConfirm, onClose }: SwapFlowProps) {
 function CompletionOverlay({
   workoutName, setsLogged, exerciseCount, startedAt, onDone,
 }: { workoutName: string; setsLogged: number; exerciseCount: number; startedAt: string; onDone: () => void }) {
+  const { t } = useI18n();
   const durationMinutes = Math.round((Date.now() - new Date(startedAt).getTime()) / 60000);
 
   return (
@@ -555,14 +563,14 @@ function CompletionOverlay({
           </div>
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-semibold uppercase tracking-widest text-primary">Workout complete</p>
+          <p className="text-sm font-semibold uppercase tracking-widest text-primary">{t("Workout complete")}</p>
           <h1 className="font-display text-3xl font-extrabold tracking-tight">{workoutName}</h1>
         </div>
         <div className="grid grid-cols-3 gap-3">
           {[
-            { value: `${durationMinutes}`, label: "minutes" },
-            { value: `${exerciseCount}`, label: "exercises" },
-            { value: `${setsLogged}`, label: "sets logged" },
+            { value: `${durationMinutes}`, label: t("minutes") },
+            { value: `${exerciseCount}`, label: t("exercises") },
+            { value: `${setsLogged}`, label: t("sets logged") },
           ].map((stat) => (
             <div key={stat.label} className="rounded-xl bg-card border border-border p-3">
               <p className="font-display text-2xl font-bold">{stat.value}</p>
@@ -570,8 +578,8 @@ function CompletionOverlay({
             </div>
           ))}
         </div>
-        <p className="text-sm text-muted-foreground">Great work. Rest, recover, and come back stronger.</p>
-        <Button className="w-full" size="lg" onClick={onDone}>Back to today</Button>
+        <p className="text-sm text-muted-foreground">{t("Great work. Rest, recover, and come back stronger.")}</p>
+        <Button className="w-full" size="lg" onClick={onDone}>{t("Back to today")}</Button>
       </div>
     </div>
   );
@@ -582,6 +590,7 @@ function CompletionOverlay({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function WorkoutSessionPage() {
+  const { t } = useI18n();
   const params = useParams();
   const router = useRouter();
   const sessionId = params["sessionId"] as string;
@@ -635,11 +644,11 @@ export default function WorkoutSessionPage() {
       .catch((err: unknown) => {
         if (!active) return;
         if (err instanceof ApiError && err.status === 404) router.replace("/today");
-        else setError("Could not load session. Please try again.");
+        else setError(t("Could not load session. Please try again."));
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [sessionId, router]);
+  }, [sessionId, router, t]);
 
   // ─── Rest timer countdown ───────────────────────────────────────────────────
 
@@ -711,7 +720,7 @@ export default function WorkoutSessionPage() {
         }
       }
     } catch (err: unknown) {
-      setError(err instanceof ApiError ? err.message : "Failed to log set.");
+      setError(err instanceof ApiError ? err.message : t("Failed to log set."));
     } finally {
       setSaving(false);
     }
@@ -728,7 +737,7 @@ export default function WorkoutSessionPage() {
       setRestTimer(null);
       setCompleted(true);
     } catch (err: unknown) {
-      setError(err instanceof ApiError ? err.message : "Failed to complete session.");
+      setError(err instanceof ApiError ? err.message : t("Failed to complete session."));
       setCompleting(false);
     }
   }
@@ -764,13 +773,13 @@ export default function WorkoutSessionPage() {
           <button
             onClick={() => router.replace("/today")}
             className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
-            aria-label="Back to today"
+            aria-label={t("Back to today")}
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="flex-1 min-w-0">
             <p className="font-display text-xl font-bold truncate">{session.workoutDay.workoutName}</p>
-            <p className="text-xs text-muted-foreground">{loggedCount}/{totalSets} sets logged</p>
+            <p className="text-xs text-muted-foreground">{loggedCount}/{totalSets} {t("sets logged")}</p>
           </div>
           <div className="h-1.5 w-20 flex-shrink-0 overflow-hidden rounded-full bg-secondary">
             <div
@@ -817,14 +826,14 @@ export default function WorkoutSessionPage() {
             disabled={completing || saving}
           >
             {completing
-              ? "Saving…"
+              ? t("Saving…")
               : allDone
-                ? "Complete workout"
-                : `Finish early (${loggedCount}/${totalSets} sets)`}
+                ? t("Complete workout")
+                : t("Finish early ({a}/{b} sets)", { a: loggedCount, b: totalSets })}
           </Button>
           {!allDone && (
             <p className="mt-2 text-center text-xs text-muted-foreground">
-              You can finish early — only logged sets are saved.
+              {t("You can finish early — only logged sets are saved.")}
             </p>
           )}
         </div>

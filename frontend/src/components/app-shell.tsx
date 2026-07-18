@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { CalendarDays, LineChart, MessageSquareText, LogOut } from "lucide-react";
 import { Wordmark } from "@/components/wordmark";
 import { session } from "@/lib/session";
+import { useI18n, LangToggle } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -24,6 +25,7 @@ const NAV = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useI18n();
 
   function handleSignOut() {
     session.signOut();
@@ -34,6 +36,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col">
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur">
         <Wordmark />
+        <div className="flex items-center gap-2">
+        <LangToggle />
         <button
           onClick={handleSignOut}
           className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
@@ -41,6 +45,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         >
           <LogOut className="h-5 w-5" />
         </button>
+        </div>
       </header>
 
       <main className="flex-1 px-4 pb-28 pt-5">{children}</main>
@@ -60,7 +65,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   aria-current={active ? "page" : undefined}
                 >
                   <Icon className="h-5 w-5" />
-                  {label}
+                  {t(label)}
                 </Link>
               </li>
             );

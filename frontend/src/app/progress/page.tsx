@@ -15,17 +15,19 @@ import {
   type FitnessProfileDto,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 // ─── SVG line chart ───────────────────────────────────────────────────────────
 
 interface ChartPoint { label: string; value: number | null }
 
 function LineChart({ points, unit = "", gradientId = "chartGrad" }: { points: ChartPoint[]; unit?: string; gradientId?: string }) {
+  const { t } = useI18n();
   const valid = points.filter((p) => p.value !== null) as { label: string; value: number }[];
   if (valid.length < 2) {
     return (
       <p className="py-6 text-center text-sm text-muted-foreground">
-        Not enough data yet — log 2+ entries to see a trend.
+        {t("Not enough data yet — log 2+ entries to see a trend.")}
       </p>
     );
   }
@@ -84,6 +86,7 @@ function LineChart({ points, unit = "", gradientId = "chartGrad" }: { points: Ch
 // ─── BF% category badge ───────────────────────────────────────────────────────
 
 function BfBadge({ bf, sex }: { bf: number; sex?: string }) {
+  const { t } = useI18n();
   let label: string, color: string;
   if (sex === "FEMALE") {
     if      (bf < 14) { label = "Essential fat"; color = "text-amber-400"; }
@@ -100,7 +103,7 @@ function BfBadge({ bf, sex }: { bf: number; sex?: string }) {
   }
   return (
     <span className={cn("text-xs font-semibold", color)}>
-      {bf.toFixed(1)}% · {label}
+      {bf.toFixed(1)}% · {t(label)}
     </span>
   );
 }
@@ -108,6 +111,7 @@ function BfBadge({ bf, sex }: { bf: number; sex?: string }) {
 // ─── Wellness dots ────────────────────────────────────────────────────────────
 
 function WellnessDots({ checkIns }: { checkIns: WeeklyCheckInDto[] }) {
+  const { t } = useI18n();
   const recent = checkIns.slice(0, 6).reverse();
   if (recent.length === 0) return null;
 
@@ -122,21 +126,21 @@ function WellnessDots({ checkIns }: { checkIns: WeeklyCheckInDto[] }) {
     <div className="space-y-3">
       {(["sleepQualityRating", "energyRating", "stressRating"] as const).map((field) => {
         const labels: Record<string, string> = {
-          sleepQualityRating: "Sleep",
-          energyRating: "Energy",
-          stressRating: "Stress",
+          sleepQualityRating: t("Sleep"),
+          energyRating: t("Energy"),
+          stressRating: t("Stress"),
         };
         return (
           <div key={field} className="flex items-center gap-3">
             <span className="w-14 text-xs text-muted-foreground">{labels[field]}</span>
             <div className="flex gap-1.5">
               {recent.map((c, i) => (
-                <div key={i} title={`Week of ${c.weekStart}: ${c[field] ?? "—"}/5`}
+                <div key={i} title={`${t("Week of")} ${c.weekStart}: ${c[field] ?? "—"}/5`}
                   className={cn("h-4 w-4 rounded-full", dotColor(c[field]))} />
               ))}
             </div>
             <span className="text-xs text-muted-foreground/60">
-              {recent[recent.length - 1]?.[field] ?? "—"}/5 this week
+              {recent[recent.length - 1]?.[field] ?? "—"}/5 {t("this week")}
             </span>
           </div>
         );
@@ -171,12 +175,13 @@ function StatCard({ icon: Icon, value, label, sub }: { icon: React.ElementType; 
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-function weekLabel(isoDate: string) {
+function weekLabel(isoDate: string, locale?: string) {
   const d = new Date(isoDate);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return d.toLocaleDateString(locale, { month: "short", day: "numeric" });
 }
 
 export default function ProgressPage() {
+  const { t, locale } = useI18n();
   const [stats, setStats] = React.useState<ProgressStatsDto | null>(null);
   const [measurements, setMeasurements] = React.useState<BodyMeasurementDto[]>([]);
   const [profile, setProfile] = React.useState<FitnessProfileDto | null>(null);
@@ -197,15 +202,15 @@ export default function ProgressPage() {
         setProfile(p);
       })
       .catch((err: unknown) => {
-        if (active) setError(err instanceof ApiError ? err.message : "Could not load progress data.");
+        if (active) setError(err instanceof ApiError ? err.message : t("Could not load progress data."));
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [t]);
 
   const weightPoints: ChartPoint[] = (stats?.checkInHistory ?? [])
     .slice().reverse()
-    .map((c) => ({ label: weekLabel(c.weekStart), value: c.weightKg }));
+    .map((c) => ({ label: weekLabel(c.weekStart, locale), value: c.weightKg }));
 
   const bfPoints: ChartPoint[] = [...measurements]
     .reverse()
@@ -225,20 +230,20 @@ export default function ProgressPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium uppercase tracking-[0.18em] text-muted-foreground">Your</p>
-            <h1 className="font-display text-4xl font-extrabold leading-tight tracking-tight">Progress</h1>
+            <p className="text-sm font-medium uppercase tracking-[0.18em] text-muted-foreground">{t("Your")}</p>
+            <h1 className="font-display text-4xl font-extrabold leading-tight tracking-tight">{t("Progress")}</h1>
           </div>
           <div className="flex gap-2">
             <Link href="/measurements">
               <Button size="sm" variant="secondary">
                 <Ruler className="h-4 w-4 mr-1.5" />
-                Measure
+                {t("Measure")}
               </Button>
             </Link>
             <Link href="/check-in">
               <Button size="sm" variant="secondary">
                 <ClipboardList className="h-4 w-4 mr-1.5" />
-                Check in
+                {t("Check in")}
               </Button>
             </Link>
           </div>
@@ -261,16 +266,16 @@ export default function ProgressPage() {
           <>
             {/* Stat cards */}
             <div className="grid grid-cols-2 gap-3">
-              <StatCard icon={Trophy}       value={String(stats.totalWorkoutsAllTime)} label="Total workouts" sub="all time" />
-              <StatCard icon={Target}       value={`${stats.adherenceRate4Weeks}%`}   label="Adherence"      sub="last 4 weeks" />
-              <StatCard icon={Flame}        value={`${stats.currentStreakWeeks}w`}     label="Current streak" sub="consecutive weeks" />
-              <StatCard icon={ClipboardList} value={String(stats.workoutsThisWeek)}  label="This week"      sub="sessions done" />
+              <StatCard icon={Trophy}       value={String(stats.totalWorkoutsAllTime)} label={t("Total workouts")} sub={t("all time")} />
+              <StatCard icon={Target}       value={`${stats.adherenceRate4Weeks}%`}   label={t("Adherence")}      sub={t("last 4 weeks")} />
+              <StatCard icon={Flame}        value={`${stats.currentStreakWeeks}w`}     label={t("Current streak")} sub={t("consecutive weeks")} />
+              <StatCard icon={ClipboardList} value={String(stats.workoutsThisWeek)}  label={t("This week")}      sub={t("sessions done")} />
             </div>
 
             {/* Weight trend */}
             <Card>
               <CardContent className="p-4 space-y-4">
-                <p className="font-semibold">Weight trend</p>
+                <p className="font-semibold">{t("Weight trend")}</p>
                 <LineChart points={weightPoints} unit=" kg" gradientId="weightGrad" />
               </CardContent>
             </Card>
@@ -280,10 +285,10 @@ export default function ProgressPage() {
               <CardContent className="p-4 space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-semibold">Body fat %</p>
+                    <p className="font-semibold">{t("Body fat %")}</p>
                     {measurements[0]?.bodyFatMethod && (
                       <p className="text-xs text-muted-foreground/60">
-                        {measurements[0].bodyFatMethod === "BAI" ? "Body Adiposity Index" : "US Navy method"}
+                        {measurements[0].bodyFatMethod === "BAI" ? t("Body Adiposity Index") : t("US Navy method")}
                       </p>
                     )}
                   </div>
@@ -294,18 +299,16 @@ export default function ProgressPage() {
                 ) : measurements.length === 0 ? (
                   <div className="py-2 space-y-3">
                     <p className="text-sm text-muted-foreground">
-                      Track your body composition with the US Navy method. Log your neck, waist{" "}
-                      {/* sex unknown without profile — show generic text */}
-                      and hip measurements to see your body fat trend.
+                      {t("Track your body composition. Log your measurements to see your body fat trend.")}
                     </p>
                     <Link href="/measurements">
-                      <Button className="w-full" variant="secondary">Log first measurement</Button>
+                      <Button className="w-full" variant="secondary">{t("Log first measurement")}</Button>
                     </Link>
                   </div>
                 ) : (
                   <p className="py-2 text-sm text-muted-foreground">
-                    Log 2+ measurements to see a trend.{" "}
-                    <Link href="/measurements" className="text-primary underline underline-offset-2">Add one now →</Link>
+                    {t("Log 2+ measurements to see a trend.")}{" "}
+                    <Link href="/measurements" className="text-primary underline underline-offset-2">{t("Add one now →")}</Link>
                   </p>
                 )}
 
@@ -313,12 +316,12 @@ export default function ProgressPage() {
                 {measurements[0] && (
                   <div className="grid grid-cols-3 gap-2 pt-1">
                     {[
-                      { label: "Waist",  val: measurements[0].waistCm },
-                      { label: "Chest",  val: measurements[0].chestCm },
-                      { label: "Bicep",  val: measurements[0].bicepCm },
-                      { label: "Thigh",  val: measurements[0].thighCm },
-                      { label: "Calf",   val: measurements[0].calfCm },
-                      { label: "Neck",   val: measurements[0].neckCm },
+                      { label: t("Waist"),  val: measurements[0].waistCm },
+                      { label: t("Chest"),  val: measurements[0].chestCm },
+                      { label: t("Bicep"),  val: measurements[0].bicepCm },
+                      { label: t("Thigh"),  val: measurements[0].thighCm },
+                      { label: t("Calf"),   val: measurements[0].calfCm },
+                      { label: t("Neck"),   val: measurements[0].neckCm },
                     ].filter((s) => s.val !== null).map((s) => (
                       <div key={s.label} className="rounded-lg bg-elevated px-2 py-1.5 text-center">
                         <p className="text-xs text-muted-foreground">{s.label}</p>
@@ -334,7 +337,7 @@ export default function ProgressPage() {
             {stats.checkInHistory.length > 0 && (
               <Card>
                 <CardContent className="p-4 space-y-4">
-                  <p className="font-semibold">Weekly wellness</p>
+                  <p className="font-semibold">{t("Weekly wellness")}</p>
                   <WellnessDots checkIns={stats.checkInHistory} />
                 </CardContent>
               </Card>
@@ -344,19 +347,19 @@ export default function ProgressPage() {
             {stats.checkInHistory.length > 0 ? (
               <Card>
                 <CardContent className="p-4 space-y-3">
-                  <p className="font-semibold">Check-in history</p>
+                  <p className="font-semibold">{t("Check-in history")}</p>
                   <div className="space-y-2">
                     {stats.checkInHistory.slice(0, 8).map((c) => (
                       <div key={c.id} className="flex items-center justify-between rounded-lg bg-elevated px-3 py-2.5">
                         <div>
-                          <p className="text-sm font-medium">Week of {weekLabel(c.weekStart)}</p>
+                          <p className="text-sm font-medium">{t("Week of")} {weekLabel(c.weekStart, locale)}</p>
                           <p className="text-xs text-muted-foreground">
-                            {c.weightKg ? `${c.weightKg} kg` : "No weight"} · {c.painStatus.replace(/_/g, " ").toLowerCase()}
+                            {c.weightKg ? `${c.weightKg} kg` : t("No weight")} · {t(c.painStatus)}
                           </p>
                         </div>
                         <div className="text-right text-xs text-muted-foreground space-y-0.5">
-                          {c.sleepQualityRating && <p>sleep {c.sleepQualityRating}/5</p>}
-                          {c.energyRating && <p>energy {c.energyRating}/5</p>}
+                          {c.sleepQualityRating && <p>{t("sleep")} {c.sleepQualityRating}/5</p>}
+                          {c.energyRating && <p>{t("energy")} {c.energyRating}/5</p>}
                         </div>
                       </div>
                     ))}
@@ -367,10 +370,10 @@ export default function ProgressPage() {
               <Card>
                 <CardContent className="p-6 text-center space-y-3">
                   <p className="text-sm text-muted-foreground">
-                    No check-ins yet. Do your first weekly check-in to start tracking your weight and wellness trends.
+                    {t("No check-ins yet. Do your first weekly check-in to start tracking your weight and wellness trends.")}
                   </p>
                   <Link href="/check-in">
-                    <Button className="w-full" size="lg">Do your first check-in</Button>
+                    <Button className="w-full" size="lg">{t("Do your first check-in")}</Button>
                   </Link>
                 </CardContent>
               </Card>

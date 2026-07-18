@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import { session } from "@/lib/session";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Trainer selector
@@ -58,6 +59,7 @@ function TrainerCard({ trainer, selected, onSelect }: TrainerCardProps) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function DayRow({ day }: { day: WorkoutDayDto }) {
+  const { t } = useI18n();
   const [open, setOpen] = React.useState(false);
   return (
     <div className="rounded-lg border border-border overflow-hidden">
@@ -67,7 +69,7 @@ function DayRow({ day }: { day: WorkoutDayDto }) {
         aria-expanded={open}
       >
         <span className="font-medium text-sm">
-          Day {day.dayNumber} — {day.workoutName}
+          {t("Day {n}", { n: day.dayNumber })} — {day.workoutName}
         </span>
         {open ? (
           <ChevronUp className="h-4 w-4 text-muted-foreground flex-shrink-0" />
@@ -100,6 +102,7 @@ interface PlanCardProps {
 }
 
 function PlanCard({ plan, option, isRecommended, submitting, onSelect }: PlanCardProps) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = React.useState(isRecommended);
 
   return (
@@ -116,18 +119,18 @@ function PlanCard({ plan, option, isRecommended, submitting, onSelect }: PlanCar
           {isRecommended && (
             <div className="flex items-center gap-1.5 text-primary text-xs font-semibold uppercase tracking-wider mb-1">
               <Star className="h-3.5 w-3.5 fill-current" />
-              Recommended for you
+              {t("Recommended for you")}
             </div>
           )}
           <h2 className="font-display text-xl font-bold leading-tight">{plan.name}</h2>
           <p className="text-sm text-muted-foreground">
-            {plan.trainingDaysPerWeek} days / week
+            {t("{n} days/week", { n: plan.trainingDaysPerWeek })}
           </p>
         </div>
         <button
           className="text-muted-foreground hover:text-foreground transition-colors mt-1"
           onClick={() => setExpanded((e) => !e)}
-          aria-label={expanded ? "Collapse" : "Expand"}
+          aria-label={expanded ? t("Collapse") : t("Expand")}
         >
           {expanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
         </button>
@@ -155,7 +158,7 @@ function PlanCard({ plan, option, isRecommended, submitting, onSelect }: PlanCar
         disabled={submitting}
         onClick={() => onSelect(option)}
       >
-        {submitting ? "Saving…" : isRecommended ? "Start with this plan" : "Choose this instead"}
+        {submitting ? t("Saving…") : isRecommended ? t("Start with this plan") : t("Choose this instead")}
       </Button>
     </div>
   );
@@ -167,6 +170,7 @@ function PlanCard({ plan, option, isRecommended, submitting, onSelect }: PlanCar
 
 export default function PlanSelectionPage() {
   const router = useRouter();
+  const { t } = useI18n();
 
   const [trainers, setTrainers] = React.useState<TrainerPhilosophyDto[]>([]);
   const [selectedTrainerId, setSelectedTrainerId] = React.useState<string | null>(null);
@@ -196,11 +200,11 @@ export default function PlanSelectionPage() {
       })
       .catch((err: unknown) => {
         if (!active) return;
-        setError(err instanceof ApiError ? err.message : "Could not load plans. Please try again.");
+        setError(err instanceof ApiError ? err.message : t("Could not load plans. Please try again."));
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [t]);
 
   // Re-fetch plans when trainer changes (not on initial load — handled above)
   async function handleTrainerSelect(trainerId: string) {
@@ -213,7 +217,7 @@ export default function PlanSelectionPage() {
       setRecommended(options.recommended);
       setAlternative(options.alternative);
     } catch (err: unknown) {
-      setError(err instanceof ApiError ? err.message : "Could not load plans. Please try again.");
+      setError(err instanceof ApiError ? err.message : t("Could not load plans. Please try again."));
     } finally {
       setPlanLoading(false);
     }
@@ -227,7 +231,7 @@ export default function PlanSelectionPage() {
       session.setPlanSelected();
       router.replace("/today");
     } catch (err: unknown) {
-      setError(err instanceof ApiError ? err.message : "Could not save plan. Please try again.");
+      setError(err instanceof ApiError ? err.message : t("Could not save plan. Please try again."));
       setSubmitting(false);
     }
   }
@@ -242,14 +246,13 @@ export default function PlanSelectionPage() {
         <div className="space-y-1">
           <Wordmark className="h-6 mb-4" />
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Step 3
+            {t("Step 3")}
           </p>
           <h1 className="font-display text-3xl font-extrabold leading-tight tracking-tight">
-            Choose your style
+            {t("Choose your style")}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Pick a training philosophy, then select your plan. The approach shapes your
-            rep ranges, rest times, and intensity.
+            {t("Pick a training philosophy, then select your plan. The approach shapes your rep ranges, rest times, and intensity.")}
           </p>
         </div>
 
@@ -268,7 +271,7 @@ export default function PlanSelectionPage() {
         ) : (
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-0.5">
-              Training philosophy
+              {t("Training philosophy")}
             </p>
             {trainers.map((trainer) => (
               <TrainerCard
@@ -285,10 +288,10 @@ export default function PlanSelectionPage() {
         {selectedTrainer && !loading && (
           <div className="flex flex-wrap gap-3 text-center">
             {[
-              { label: "Compound reps", value: `${selectedTrainer.compoundRepMin}–${selectedTrainer.compoundRepMax}` },
-              { label: "Isolation reps", value: `${selectedTrainer.isolationRepMin}–${selectedTrainer.isolationRepMax}` },
-              { label: "Rest (compound)", value: `${Math.round(selectedTrainer.restSecondsCompound / 60)}–${Math.ceil(selectedTrainer.restSecondsCompound / 60) + 0.5} min` },
-              { label: "Target RIR", value: `${selectedTrainer.rirTarget} RIR` },
+              { label: t("Compound reps"), value: `${selectedTrainer.compoundRepMin}–${selectedTrainer.compoundRepMax}` },
+              { label: t("Isolation reps"), value: `${selectedTrainer.isolationRepMin}–${selectedTrainer.isolationRepMax}` },
+              { label: t("Rest (compound)"), value: `${Math.round(selectedTrainer.restSecondsCompound / 60)}–${Math.ceil(selectedTrainer.restSecondsCompound / 60) + 0.5} min` },
+              { label: t("Target RIR"), value: `${selectedTrainer.rirTarget} RIR` },
             ].map((stat) => (
               <div key={stat.label} className="flex-1 min-w-[80px] rounded-lg bg-elevated border border-border px-3 py-2">
                 <p className="text-xs font-bold">{stat.value}</p>
@@ -302,7 +305,7 @@ export default function PlanSelectionPage() {
         {!loading && (
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-border" />
-            <span className="text-xs text-muted-foreground font-medium">Your generated plans</span>
+            <span className="text-xs text-muted-foreground font-medium">{t("Your generated plans")}</span>
             <div className="flex-1 h-px bg-border" />
           </div>
         )}

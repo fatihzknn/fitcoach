@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, ApiError, type CheckInPainStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 // ─── Rating picker (1–5 stars/dots) ─────────────────────────────────────────
 
@@ -60,6 +61,7 @@ const PAIN_OPTIONS: { value: CheckInPainStatus; label: string }[] = [
 
 export default function CheckInPage() {
   const router = useRouter();
+  const { t } = useI18n();
 
   const [weight, setWeight] = React.useState("");
   const [sleep, setSleep] = React.useState<number | null>(null);
@@ -86,7 +88,7 @@ export default function CheckInPage() {
       });
       setDone(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not save. Try again.");
+      setError(err instanceof ApiError ? err.message : t("Could not save. Try again."));
       setSubmitting(false);
     }
   }
@@ -97,10 +99,10 @@ export default function CheckInPage() {
         <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/15">
           <CheckCircle2 className="h-10 w-10 text-primary" />
         </div>
-        <h1 className="font-display text-2xl font-bold">Check-in saved</h1>
-        <p className="text-sm text-muted-foreground">Great work staying consistent this week.</p>
+        <h1 className="font-display text-2xl font-bold">{t("Check-in saved")}</h1>
+        <p className="text-sm text-muted-foreground">{t("Great work staying consistent this week.")}</p>
         <Button className="w-full max-w-xs" size="lg" onClick={() => router.replace("/progress")}>
-          View progress
+          {t("View progress")}
         </Button>
       </main>
     );
@@ -119,9 +121,9 @@ export default function CheckInPage() {
         </button>
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Weekly
+            {t("Weekly")}
           </p>
-          <h1 className="font-display text-2xl font-bold">Check-in</h1>
+          <h1 className="font-display text-2xl font-bold">{t("Check-in")}</h1>
         </div>
       </div>
 
@@ -131,13 +133,13 @@ export default function CheckInPage() {
         <Card>
           <CardContent className="p-4 space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="weight">Body weight (kg)</Label>
-              <p className="text-xs text-muted-foreground">Optional — used for trend tracking</p>
+              <Label htmlFor="weight">{t("Body weight (kg)")}</Label>
+              <p className="text-xs text-muted-foreground">{t("Optional — used for trend tracking")}</p>
             </div>
             <Input
               id="weight"
               inputMode="decimal"
-              placeholder="e.g. 75.5"
+              placeholder={t("e.g. 75.5")}
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
             />
@@ -147,35 +149,35 @@ export default function CheckInPage() {
         {/* Wellness ratings */}
         <Card>
           <CardContent className="p-4 space-y-5">
-            <p className="font-semibold">How did this week feel?</p>
+            <p className="font-semibold">{t("How did this week feel?")}</p>
 
             <div className="space-y-1.5">
-              <Label>Sleep quality</Label>
+              <Label>{t("Sleep quality")}</Label>
               <RatingPicker
                 value={sleep}
                 onChange={setSleep}
-                lowLabel="Poor"
-                highLabel="Great"
+                lowLabel={t("Poor")}
+                highLabel={t("Great")}
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label>Energy levels</Label>
+              <Label>{t("Energy levels")}</Label>
               <RatingPicker
                 value={energy}
                 onChange={setEnergy}
-                lowLabel="Drained"
-                highLabel="High energy"
+                lowLabel={t("Drained")}
+                highLabel={t("High energy")}
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label>Stress</Label>
+              <Label>{t("Stress")}</Label>
               <RatingPicker
                 value={stress}
                 onChange={setStress}
-                lowLabel="Low stress"
-                highLabel="Very stressed"
+                lowLabel={t("Low stress")}
+                highLabel={t("Very stressed")}
               />
             </div>
           </CardContent>
@@ -184,7 +186,7 @@ export default function CheckInPage() {
         {/* Pain status */}
         <Card>
           <CardContent className="p-4 space-y-3">
-            <Label>Any pain or discomfort?</Label>
+            <Label>{t("Any pain or discomfort?")}</Label>
             <div className="grid grid-cols-2 gap-2">
               {PAIN_OPTIONS.map((o) => (
                 <button
@@ -198,14 +200,13 @@ export default function CheckInPage() {
                       : "border-border bg-card text-muted-foreground hover:bg-elevated",
                   )}
                 >
-                  {o.label}
+                  {t(o.label)}
                 </button>
               ))}
             </div>
             {(pain === "MODERATE_PAIN" || pain === "SEVERE_PAIN") && (
               <p className="text-xs text-amber-400 leading-relaxed">
-                Consider resting and consulting a healthcare professional if pain persists.
-                Never train through severe pain.
+                {t("Consider resting and consulting a healthcare professional if pain persists. Never train through severe pain.")}
               </p>
             )}
           </CardContent>
@@ -214,11 +215,11 @@ export default function CheckInPage() {
         {/* Notes */}
         <Card>
           <CardContent className="p-4 space-y-2">
-            <Label htmlFor="notes">Notes (optional)</Label>
+            <Label htmlFor="notes">{t("Notes (optional)")}</Label>
             <textarea
               id="notes"
               rows={3}
-              placeholder="Anything else about this week…"
+              placeholder={t("Anything else about this week…")}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="w-full resize-none rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -233,7 +234,7 @@ export default function CheckInPage() {
         )}
 
         <Button type="submit" className="w-full" size="lg" disabled={submitting}>
-          {submitting ? "Saving…" : "Save check-in"}
+          {submitting ? t("Saving…") : t("Save check-in")}
         </Button>
       </form>
     </main>

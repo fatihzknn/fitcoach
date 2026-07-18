@@ -10,9 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, ApiError } from "@/lib/api";
 import { session } from "@/lib/session";
+import { useI18n, LangToggle } from "@/lib/i18n";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
@@ -23,7 +25,7 @@ export default function LoginPage() {
     setError(null);
 
     if (!email.trim() || !password) {
-      setError("Enter your email and password.");
+      setError(t("Enter your email and password."));
       return;
     }
 
@@ -46,7 +48,7 @@ export default function LoginPage() {
         router.replace("/plan-selection");
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+      setError(err instanceof ApiError ? err.message : t("Something went wrong. Try again."));
       setLoading(false);
     }
   }
@@ -54,13 +56,16 @@ export default function LoginPage() {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-6 py-12">
       <form onSubmit={handleSubmit} className="animate-fade-up" noValidate>
-        <Wordmark className="text-2xl" />
-        <h1 className="mt-8 font-display text-3xl font-bold tracking-tight">Welcome back</h1>
-        <p className="mt-2 text-muted-foreground">Pick up exactly where your plan left off.</p>
+        <div className="flex items-center justify-between">
+          <Wordmark className="text-2xl" />
+          <LangToggle />
+        </div>
+        <h1 className="mt-8 font-display text-3xl font-bold tracking-tight">{t("Welcome back")}</h1>
+        <p className="mt-2 text-muted-foreground">{t("Pick up exactly where your plan left off.")}</p>
 
         <div className="mt-8 space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{t("Email")}</Label>
             <Input
               id="email"
               type="email"
@@ -71,7 +76,7 @@ export default function LoginPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t("Password")}</Label>
             <Input
               id="password"
               type="password"
@@ -90,13 +95,13 @@ export default function LoginPage() {
         )}
 
         <Button type="submit" className="mt-8 w-full" size="lg" disabled={loading}>
-          {loading ? "Signing in…" : "Sign in"}
+          {loading ? t("Signing in…") : t("Sign in")}
         </Button>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          New here?{" "}
+          {t("New here?")}{" "}
           <Link href="/register" className="text-primary hover:underline">
-            Create an account
+            {t("Create an account")}
           </Link>
         </p>
       </form>

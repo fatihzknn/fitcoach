@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, ApiError, type BodyMeasurementDto, type FitnessProfileDto } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 // ─── BF% category ────────────────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@ function MeasurementField({
 
 export default function MeasurementsPage() {
   const router = useRouter();
+  const { t } = useI18n();
 
   const [profile, setProfile] = React.useState<FitnessProfileDto | null>(null);
   const [saved,   setSaved]   = React.useState<BodyMeasurementDto | null>(null);
@@ -109,7 +111,7 @@ export default function MeasurementsPage() {
       });
       setSaved(result);
     } catch (err: unknown) {
-      setError(err instanceof ApiError ? err.message : "Could not save measurement.");
+      setError(err instanceof ApiError ? err.message : t("Could not save measurement."));
     } finally {
       setSubmitting(false);
     }
@@ -134,30 +136,30 @@ export default function MeasurementsPage() {
         </div>
 
         <div className="text-center space-y-1">
-          <h1 className="font-display text-2xl font-bold">Measurements saved</h1>
+          <h1 className="font-display text-2xl font-bold">{t("Measurements saved")}</h1>
           <p className="text-sm text-muted-foreground">{saved.measuredAt}</p>
         </div>
 
         {/* BF% result */}
         {bf != null && cat ? (
           <div className="w-full rounded-2xl border border-primary/30 bg-primary/5 p-6 text-center space-y-2">
-            <p className="text-sm text-muted-foreground">Estimated body fat</p>
+            <p className="text-sm text-muted-foreground">{t("Estimated body fat")}</p>
             <p className="font-display text-5xl font-extrabold tracking-tight">
               {bf.toFixed(1)}<span className="text-2xl font-bold">%</span>
             </p>
             <span className={cn("inline-block rounded-full px-3 py-1 text-sm font-semibold bg-card border border-border", cat.color)}>
-              {cat.label}
+              {t(cat.label)}
             </span>
             {methodLabel && (
-              <p className="text-xs text-muted-foreground pt-1">{methodLabel}</p>
+              <p className="text-xs text-muted-foreground pt-1">{t(methodLabel)}</p>
             )}
           </div>
         ) : (
           <div className="w-full rounded-2xl border border-border bg-card p-4 text-center">
             <p className="text-sm text-muted-foreground">
               {isFemale
-                ? "Measure your hip circumference to estimate body fat (BAI method)."
-                : "Measure neck and waist to estimate body fat (US Navy method)."}
+                ? t("Measure your hip circumference to estimate body fat (BAI method).")
+                : t("Measure neck and waist to estimate body fat (US Navy method).")}
             </p>
           </div>
         )}
@@ -165,13 +167,13 @@ export default function MeasurementsPage() {
         {/* Site measurements summary */}
         <div className="w-full grid grid-cols-2 gap-2">
           {[
-            { label: "Weight", val: saved.weightKg,   unit: "kg" },
-            { label: "Waist",  val: saved.waistCm,    unit: "cm" },
-            { label: "Hip",    val: saved.hipCm,      unit: "cm" },
-            { label: "Chest",  val: saved.chestCm,    unit: "cm" },
-            { label: "Bicep",  val: saved.bicepCm,    unit: "cm" },
-            { label: "Thigh",  val: saved.thighCm,    unit: "cm" },
-            { label: "Calf",   val: saved.calfCm,     unit: "cm" },
+            { label: t("Weight"), val: saved.weightKg,   unit: "kg" },
+            { label: t("Waist"),  val: saved.waistCm,    unit: "cm" },
+            { label: t("Hip"),    val: saved.hipCm,      unit: "cm" },
+            { label: t("Chest"),  val: saved.chestCm,    unit: "cm" },
+            { label: t("Bicep"),  val: saved.bicepCm,    unit: "cm" },
+            { label: t("Thigh"),  val: saved.thighCm,    unit: "cm" },
+            { label: t("Calf"),   val: saved.calfCm,     unit: "cm" },
           ].filter((s) => s.val != null).map((s) => (
             <div key={s.label} className="rounded-lg bg-elevated border border-border px-3 py-2 flex justify-between items-center">
               <span className="text-xs text-muted-foreground">{s.label}</span>
@@ -181,8 +183,8 @@ export default function MeasurementsPage() {
         </div>
 
         <div className="flex flex-col gap-2 w-full">
-          <Button className="w-full" onClick={() => router.push("/progress")}>View progress</Button>
-          <Button variant="secondary" className="w-full" onClick={resetForm}>Log another</Button>
+          <Button className="w-full" onClick={() => router.push("/progress")}>{t("View progress")}</Button>
+          <Button variant="secondary" className="w-full" onClick={resetForm}>{t("Log another")}</Button>
         </div>
       </main>
     );
@@ -200,8 +202,8 @@ export default function MeasurementsPage() {
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div>
-          <h1 className="font-display text-2xl font-bold">Body measurements</h1>
-          <p className="text-xs text-muted-foreground">Today&apos;s reading</p>
+          <h1 className="font-display text-2xl font-bold">{t("Body measurements")}</h1>
+          <p className="text-xs text-muted-foreground">{t("Today's reading")}</p>
         </div>
       </div>
 
@@ -213,13 +215,13 @@ export default function MeasurementsPage() {
           <div className="text-xs text-muted-foreground leading-relaxed space-y-0.5">
             {isFemale ? (
               <>
-                <p><strong className="text-foreground">Women</strong> — Body Adiposity Index (BAI): hip + height only. More accurate for women than US Navy (r=0.85 vs DEXA).</p>
-                <p>Height from your profile: {profile?.heightCm} cm.</p>
+                <p><strong className="text-foreground">{t("Women")}</strong> — {t("Body Adiposity Index (BAI): hip + height only. More accurate for women than US Navy.")}</p>
+                <p>{t("Height from your profile:")} {profile?.heightCm} cm.</p>
               </>
             ) : (
               <>
-                <p><strong className="text-foreground">Men</strong> — US Navy circumference method: neck + waist + height.</p>
-                <p>Height from your profile: {profile?.heightCm} cm.</p>
+                <p><strong className="text-foreground">{t("Men")}</strong> — {t("US Navy circumference method: neck + waist + height.")}</p>
+                <p>{t("Height from your profile:")} {profile?.heightCm} cm.</p>
               </>
             )}
           </div>
@@ -227,9 +229,9 @@ export default function MeasurementsPage() {
 
         {/* Weight */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Weight</h2>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{t("Weight")}</h2>
           <MeasurementField
-            id="weight" label="Body weight" unit="kg"
+            id="weight" label={t("Body weight")} unit="kg"
             value={weight} onChange={setWeight}
           />
         </section>
@@ -238,7 +240,7 @@ export default function MeasurementsPage() {
         <section className="space-y-3">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-              Body fat estimate
+              {t("Body fat estimate")}
             </h2>
             <span className="text-xs text-muted-foreground/60">
               {isFemale ? "BAI" : "US Navy"}
@@ -248,21 +250,21 @@ export default function MeasurementsPage() {
           {isFemale ? (
             // Women: hip alone → BAI
             <MeasurementField
-              id="hip" label="Hip circumference" required
-              description="Widest point of the hips and buttocks."
+              id="hip" label={t("Hip circumference")} required
+              description={t("Widest point of the hips and buttocks.")}
               value={hip} onChange={setHip}
             />
           ) : (
             // Men: neck + waist → Navy
             <>
               <MeasurementField
-                id="neck" label="Neck" required
-                description="Below the larynx (Adam's apple), slightly angled downward."
+                id="neck" label={t("Neck")} required
+                description={t("Below the larynx (Adam's apple), slightly angled downward.")}
                 value={neck} onChange={setNeck}
               />
               <MeasurementField
-                id="waist" label="Waist / abdomen" required
-                description="At the navel, relaxed (not sucked in)."
+                id="waist" label={t("Waist / abdomen")} required
+                description={t("At the navel, relaxed (not sucked in).")}
                 value={waist} onChange={setWaist}
               />
             </>
@@ -270,7 +272,7 @@ export default function MeasurementsPage() {
 
           {!canComputeBf && (isFemale ? hip === "" : neck === "" || waist === "") && (
             <p className="text-xs text-amber-400">
-              {isFemale ? "Add hip measurement to estimate body fat." : "Add neck and waist to estimate body fat."}
+              {isFemale ? t("Add hip measurement to estimate body fat.") : t("Add neck and waist to estimate body fat.")}
             </p>
           )}
         </section>
@@ -278,26 +280,26 @@ export default function MeasurementsPage() {
         {/* Optional measurements */}
         <section className="space-y-3">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-            Optional measurements
+            {t("Optional measurements")}
           </h2>
           <div className="grid grid-cols-2 gap-3">
             {isFemale ? (
               // For women neck + waist are optional (not needed for BAI)
               <>
-                <MeasurementField id="waist"  label="Waist"  value={waist}  onChange={setWaist}  />
-                <MeasurementField id="neck"   label="Neck"   value={neck}   onChange={setNeck}   />
-                <MeasurementField id="chest"  label="Chest"  value={chest}  onChange={setChest}  />
-                <MeasurementField id="bicep"  label="Bicep"  value={bicep}  onChange={setBicep}  />
-                <MeasurementField id="thigh"  label="Thigh"  value={thigh}  onChange={setThigh}  />
-                <MeasurementField id="calf"   label="Calf"   value={calf}   onChange={setCalf}   />
+                <MeasurementField id="waist"  label={t("Waist")}  value={waist}  onChange={setWaist}  />
+                <MeasurementField id="neck"   label={t("Neck")}   value={neck}   onChange={setNeck}   />
+                <MeasurementField id="chest"  label={t("Chest")}  value={chest}  onChange={setChest}  />
+                <MeasurementField id="bicep"  label={t("Bicep")}  value={bicep}  onChange={setBicep}  />
+                <MeasurementField id="thigh"  label={t("Thigh")}  value={thigh}  onChange={setThigh}  />
+                <MeasurementField id="calf"   label={t("Calf")}   value={calf}   onChange={setCalf}   />
               </>
             ) : (
               // For men hip, chest, bicep, thigh, calf are optional
               <>
-                <MeasurementField id="chest"  label="Chest"  value={chest}  onChange={setChest}  />
-                <MeasurementField id="bicep"  label="Bicep"  value={bicep}  onChange={setBicep}  />
-                <MeasurementField id="thigh"  label="Thigh"  value={thigh}  onChange={setThigh}  />
-                <MeasurementField id="calf"   label="Calf"   value={calf}   onChange={setCalf}   />
+                <MeasurementField id="chest"  label={t("Chest")}  value={chest}  onChange={setChest}  />
+                <MeasurementField id="bicep"  label={t("Bicep")}  value={bicep}  onChange={setBicep}  />
+                <MeasurementField id="thigh"  label={t("Thigh")}  value={thigh}  onChange={setThigh}  />
+                <MeasurementField id="calf"   label={t("Calf")}   value={calf}   onChange={setCalf}   />
               </>
             )}
           </div>
@@ -311,7 +313,7 @@ export default function MeasurementsPage() {
 
         <div className="pb-6">
           <Button type="submit" className="w-full" size="lg" disabled={submitting}>
-            {submitting ? "Saving…" : "Save measurements"}
+            {submitting ? t("Saving…") : t("Save measurements")}
           </Button>
         </div>
       </form>

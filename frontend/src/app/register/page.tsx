@@ -10,9 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, ApiError } from "@/lib/api";
 import { session } from "@/lib/session";
+import { useI18n, LangToggle } from "@/lib/i18n";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [displayName, setDisplayName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -23,9 +25,9 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(null);
 
-    if (!displayName.trim()) return setError("Enter your name.");
-    if (!email.trim()) return setError("Enter your email.");
-    if (password.length < 8) return setError("Password must be at least 8 characters.");
+    if (!displayName.trim()) return setError(t("Enter your name."));
+    if (!email.trim()) return setError(t("Enter your email."));
+    if (password.length < 8) return setError(t("Password must be at least 8 characters."));
 
     setLoading(true);
     try {
@@ -37,7 +39,7 @@ export default function RegisterPage() {
       session.start(res.token, res.onboardingCompleted);
       router.replace("/onboarding");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+      setError(err instanceof ApiError ? err.message : t("Something went wrong. Try again."));
       setLoading(false);
     }
   }
@@ -45,28 +47,31 @@ export default function RegisterPage() {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-6 py-12">
       <form onSubmit={handleSubmit} className="animate-fade-up" noValidate>
-        <Wordmark className="text-2xl" />
+        <div className="flex items-center justify-between">
+          <Wordmark className="text-2xl" />
+          <LangToggle />
+        </div>
         <h1 className="mt-8 font-display text-3xl font-bold tracking-tight">
-          Start training smarter
+          {t("Start training smarter")}
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Two minutes of setup, then a plan that knows what you’re doing today.
+          {t("Two minutes of setup, then a plan that knows what you’re doing today.")}
         </p>
 
         <div className="mt-8 space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">{t("Name")}</Label>
             <Input
               id="name"
               type="text"
-              placeholder="Your name"
+              placeholder={t("Your name")}
               autoComplete="name"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{t("Email")}</Label>
             <Input
               id="email"
               type="email"
@@ -77,11 +82,11 @@ export default function RegisterPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t("Password")}</Label>
             <Input
               id="password"
               type="password"
-              placeholder="At least 8 characters"
+              placeholder={t("At least 8 characters")}
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -96,13 +101,13 @@ export default function RegisterPage() {
         )}
 
         <Button type="submit" className="mt-8 w-full" size="lg" disabled={loading}>
-          {loading ? "Creating account…" : "Create account"}
+          {loading ? t("Creating account…") : t("Create account")}
         </Button>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          Already have an account?{" "}
+          {t("Already have an account?")}{" "}
           <Link href="/login" className="text-primary hover:underline">
-            Sign in
+            {t("Sign in")}
           </Link>
         </p>
       </form>

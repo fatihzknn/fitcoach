@@ -16,9 +16,10 @@ import {
   type WeeklyCheckInDto,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, {
+function formatDate(iso: string, locale?: string) {
+  return new Date(iso).toLocaleDateString(locale, {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -32,6 +33,7 @@ function thisWeekCount(history: WorkoutSessionDto[]) {
 
 export default function TodayPage() {
   const router = useRouter();
+  const { t, locale } = useI18n();
   const [name, setName] = React.useState<string | null>(null);
   const [plan, setPlan] = React.useState<WorkoutPlanDto | null>(null);
   const [selectedDay, setSelectedDay] = React.useState<WorkoutDayDto | null>(null);
@@ -72,7 +74,7 @@ export default function TodayPage() {
         setError(
           err instanceof ApiError
             ? err.message
-            : "Could not load your plan. Please try again.",
+            : t("Could not load your plan. Please try again."),
         );
       })
       .finally(() => {
@@ -81,7 +83,7 @@ export default function TodayPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   async function handleStart() {
     if (!selectedDay) return;
@@ -92,7 +94,7 @@ export default function TodayPage() {
       router.push(`/workout/${session.id}`);
     } catch (err: unknown) {
       setError(
-        err instanceof ApiError ? err.message : "Could not start session. Try again.",
+        err instanceof ApiError ? err.message : t("Could not start session. Try again."),
       );
       setStarting(false);
     }
@@ -111,10 +113,10 @@ export default function TodayPage() {
         {/* Greeting */}
         <div>
           <p className="text-sm font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Today
+            {t("Today")}
           </p>
           <h1 className="mt-1 font-display text-4xl font-extrabold leading-tight tracking-tight">
-            {loading ? "Loading…" : name ? `Hi, ${name}.` : "Good to see you."}
+            {loading ? t("Loading…") : name ? t("Hi, {name}.", { name }) : t("Good to see you.")}
           </h1>
         </div>
 
@@ -124,8 +126,8 @@ export default function TodayPage() {
             <div className="flex items-center gap-3 rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 hover:bg-primary/10 transition-colors">
               <ClipboardList className="h-5 w-5 text-primary flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">Weekly check-in ready</p>
-                <p className="text-xs text-muted-foreground">Log your weight &amp; how you feel</p>
+                <p className="text-sm font-medium">{t("Weekly check-in ready")}</p>
+                <p className="text-xs text-muted-foreground">{t("Log your weight & how you feel")}</p>
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
             </div>
@@ -153,12 +155,12 @@ export default function TodayPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Your Plan
+                    {t("Your Plan")}
                   </p>
                   <p className="mt-0.5 font-medium text-foreground">{plan.name}</p>
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  {plan.trainingDaysPerWeek} days/week
+                  {t("{n} days/week", { n: plan.trainingDaysPerWeek })}
                 </span>
               </div>
 
@@ -174,7 +176,7 @@ export default function TodayPage() {
                         : "border-border bg-card text-muted-foreground hover:bg-elevated",
                     )}
                   >
-                    Day {day.dayNumber}
+                    {t("Day {n}", { n: day.dayNumber })}
                   </button>
                 ))}
               </div>
@@ -189,7 +191,7 @@ export default function TodayPage() {
                     {selectedDay.workoutName}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {selectedDay.exercises.length} exercises · {totalSets} total sets
+                    {t("{a} exercises · {b} total sets", { a: selectedDay.exercises.length, b: totalSets })}
                   </p>
                 </div>
 
@@ -220,7 +222,7 @@ export default function TodayPage() {
                 )}
 
                 <Button className="w-full" size="lg" onClick={handleStart} disabled={starting}>
-                  {starting ? "Starting…" : "Start workout"}
+                  {starting ? t("Starting…") : t("Start workout")}
                   {!starting && <ChevronRight className="ml-1 h-4 w-4" />}
                 </Button>
               </CardContent>
@@ -230,13 +232,13 @@ export default function TodayPage() {
             <Card>
               <CardContent className="p-5">
                 <div className="flex items-center justify-between mb-4">
-                  <p className="text-sm font-medium text-muted-foreground">This week</p>
-                  <span className="text-xs text-muted-foreground">last 7 days</span>
+                  <p className="text-sm font-medium text-muted-foreground">{t("This week")}</p>
+                  <span className="text-xs text-muted-foreground">{t("last 7 days")}</span>
                 </div>
                 <div className="flex items-end gap-2">
                   <p className="font-display text-4xl font-bold">{weeklyCount}</p>
                   <p className="mb-1 text-sm text-muted-foreground">
-                    / {plan.trainingDaysPerWeek} workouts
+                    / {plan.trainingDaysPerWeek} {t("workouts")}
                   </p>
                 </div>
 
@@ -253,7 +255,7 @@ export default function TodayPage() {
                           <span className="text-sm">{s.workoutDay.workoutName}</span>
                         </div>
                         <span className="text-xs text-muted-foreground">
-                          {formatDate(s.startedAt)}
+                          {formatDate(s.startedAt, locale)}
                         </span>
                       </div>
                     ))}
@@ -262,7 +264,7 @@ export default function TodayPage() {
 
                 {recentSessions.length === 0 && (
                   <p className="mt-3 text-sm text-muted-foreground">
-                    No sessions yet &mdash; start your first workout above.
+                    {t("No sessions yet — start your first workout above.")}
                   </p>
                 )}
               </CardContent>
