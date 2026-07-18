@@ -1,0 +1,9 @@
+# Keep the Docker build context small — only backend sources are needed.
+frontend/
+docs/
+backend/target/
+.git/
+.idea/
+.vscode/
+*.md
+.env
