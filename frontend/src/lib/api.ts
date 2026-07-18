@@ -254,6 +254,38 @@ export interface SubmitCheckInRequest {
   notes: string | null;
 }
 
+// ─── Body measurement types ───────────────────────────────────────────────
+
+export interface BodyMeasurementDto {
+  id: string;
+  measuredAt: string;
+  weightKg: number | null;
+  neckCm: number | null;
+  waistCm: number | null;
+  hipCm: number | null;
+  chestCm: number | null;
+  bicepCm: number | null;
+  thighCm: number | null;
+  calfCm: number | null;
+  bodyFatPercentage: number | null;
+  /** "NAVY" = US Navy method (men); "BAI" = Body Adiposity Index (women) */
+  bodyFatMethod: "NAVY" | "BAI" | null;
+  notes: string | null;
+}
+
+export interface SaveMeasurementRequest {
+  measuredAt: string | null;
+  weightKg: number | null;
+  neckCm: number | null;
+  waistCm: number | null;
+  hipCm: number | null;
+  chestCm: number | null;
+  bicepCm: number | null;
+  thighCm: number | null;
+  calfCm: number | null;
+  notes: string | null;
+}
+
 // ─── Exercise history types ───────────────────────────────────────────────────
 
 export interface ExerciseHistoryEntryDto {
@@ -379,6 +411,19 @@ export const api = {
 
   getCoachHistory: () =>
     request<ChatMessageDto[]>("/api/coach/history", { auth: true }),
+
+  saveMeasurement: (input: SaveMeasurementRequest) =>
+    request<BodyMeasurementDto>("/api/measurements", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    }),
+
+  getMeasurementHistory: () =>
+    request<BodyMeasurementDto[]>("/api/measurements/history", { auth: true }),
+
+  getLatestMeasurement: () =>
+    request<BodyMeasurementDto>("/api/measurements/latest", { auth: true }),
 
   getExerciseHistory: (exerciseId: string) =>
     request<ExerciseHistoryEntryDto[]>(
