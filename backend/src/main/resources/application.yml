@@ -23,7 +23,8 @@ spring:
     baseline-on-migrate: true
 
 server:
-  port: ${SERVER_PORT:8080}
+  # PORT is set by cloud platforms (Railway/Render); SERVER_PORT is the local override.
+  port: ${PORT:${SERVER_PORT:8080}}
   error:
     include-stacktrace: never
     include-message: never

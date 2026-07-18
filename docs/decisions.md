@@ -196,3 +196,27 @@ left a detail open and a reasonable assumption was chosen instead of asking.
 - **V6 migration (hotfix):** V5 created rating columns as `SMALLINT` (int2) but Hibernate
   maps Java `Integer` to `INTEGER` (int4), causing schema-validation failure. V6 alters the
   columns — do not modify V5 (would break Flyway checksums on existing databases).
+
+## Phase 10 — Body Measurements & Sex-Specific BF%
+
+- **Two body-fat formulas, chosen per sex by accuracy vs DEXA:** women use the
+  **Body Adiposity Index** (BAI = hip / height^1.5 − 18, r≈0.85), men use the
+  **US Navy circumference method** (r≈0.84). Navy was worse for women (r≈0.73);
+  BAI is also simpler for women (only hip needed). `Sex.OTHER` falls back to Navy.
+- `body_fat_method` (`NAVY`/`BAI`) is stored per measurement (V10) so historical
+  values remain honest if formulas change later. V10 back-fills existing rows as NAVY.
+- One measurement per user per day (`UNIQUE(user_id, measured_at)`), upsert on save.
+- Height comes from the fitness profile — not re-asked on every measurement.
+
+## Distribution — iOS via PWA
+
+- **iOS delivery is a PWA, not an IPA.** Sideloading arbitrary files is not possible
+  on iOS; TestFlight would require a paid Apple Developer account. The frontend is
+  already PWA-ready (manifest, standalone display, apple-touch-icon); users
+  install via Safari → Add to Home Screen.
+- Generated brand icons (volt-lime dumbbell on graphite): `icon-192.png`,
+  `icon-512.png`, `apple-touch-icon.png` in `frontend/public/`.
+- `server.port` now honors the cloud-standard `PORT` env var (Railway/Render),
+  falling back to `SERVER_PORT`, then 8080.
+- Deployment runbook: `docs/deployment.md` (Neon + Railway + Vercel, all free tier).
+  Local dev flow is unchanged.
