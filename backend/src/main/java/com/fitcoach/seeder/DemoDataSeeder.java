@@ -6,6 +6,9 @@ import com.fitcoach.auth.jwt.CurrentUser;
 import com.fitcoach.checkin.WeeklyCheckIn;
 import com.fitcoach.checkin.WeeklyCheckInRepository;
 import com.fitcoach.checkin.domain.CheckInPainStatus;
+import com.fitcoach.measurement.BodyMeasurement;
+import com.fitcoach.measurement.BodyMeasurementRepository;
+import com.fitcoach.measurement.BodyMeasurementService;
 import com.fitcoach.profile.ProfileService;
 import com.fitcoach.profile.domain.MainGoal;
 import com.fitcoach.profile.domain.PainArea;
@@ -65,6 +68,8 @@ public class DemoDataSeeder implements ApplicationRunner {
     private final WorkoutPlanRepository       planRepository;
     private final WorkoutSessionRepository    sessionRepository;
     private final WeeklyCheckInRepository     checkInRepository;
+    private final BodyMeasurementRepository   measurementRepository;
+    private final BodyMeasurementService      measurementService;
 
     public DemoDataSeeder(UserRepository userRepository,
                           PasswordEncoder passwordEncoder,
@@ -72,14 +77,18 @@ public class DemoDataSeeder implements ApplicationRunner {
                           WorkoutPlanService planService,
                           WorkoutPlanRepository planRepository,
                           WorkoutSessionRepository sessionRepository,
-                          WeeklyCheckInRepository checkInRepository) {
-        this.userRepository    = userRepository;
-        this.passwordEncoder   = passwordEncoder;
-        this.profileService    = profileService;
-        this.planService       = planService;
-        this.planRepository    = planRepository;
-        this.sessionRepository = sessionRepository;
-        this.checkInRepository = checkInRepository;
+                          WeeklyCheckInRepository checkInRepository,
+                          BodyMeasurementRepository measurementRepository,
+                          BodyMeasurementService measurementService) {
+        this.userRepository      = userRepository;
+        this.passwordEncoder      = passwordEncoder;
+        this.profileService       = profileService;
+        this.planService          = planService;
+        this.planRepository       = planRepository;
+        this.sessionRepository    = sessionRepository;
+        this.checkInRepository    = checkInRepository;
+        this.measurementRepository = measurementRepository;
+        this.measurementService    = measurementService;
     }
 
     @Override
@@ -154,6 +163,13 @@ public class DemoDataSeeder implements ApplicationRunner {
         seedCheckIn(user.getId(), thisWeekMon.minusWeeks(1), 75.5, 4, 5, 2, CheckInPainStatus.NO_PAIN, "Best week so far. Energy levels high.");
         seedCheckIn(user.getId(), thisWeekMon,               75.1, 4, 4, 2, CheckInPainStatus.NO_PAIN, null);
 
+        // ── 6. Body measurements (4 data points showing BF% trend) ──────────
+        // Alex: male, 180 cm height → US Navy formula (men's version)
+        seedMeasurement(cu, thisWeekMon.minusWeeks(3).plusDays(1), 76.2, 38.5, 84.0, null, 100.0, 34.0, 57.0, 38.0);
+        seedMeasurement(cu, thisWeekMon.minusWeeks(2).plusDays(1), 75.8, 38.5, 83.5, null, 100.0, 34.0, 56.5, 37.5);
+        seedMeasurement(cu, thisWeekMon.minusWeeks(1).plusDays(1), 75.5, 38.5, 83.0, null,  99.5, 34.5, 56.0, 37.5);
+        seedMeasurement(cu, thisWeekMon.plusDays(1),               75.1, 38.5, 82.5, null,  99.0, 35.0, 55.5, 37.0);
+
         log.info("");
         log.info("╔══════════════════════════════════════════╗");
         log.info("║           DEMO USER CREATED              ║");
@@ -214,6 +230,25 @@ public class DemoDataSeeder implements ApplicationRunner {
             case "Triceps Pushdown"       -> 25.0;
             default                       -> 30.0;
         };
+    }
+
+    private void seedMeasurement(CurrentUser cu, LocalDate date,
+                                 double weightKg, double neckCm, double waistCm, Double hipCm,
+                                 double chestCm, double bicepCm, double thighCm, double calfCm) {
+        com.fitcoach.measurement.dto.SaveMeasurementRequest req =
+                new com.fitcoach.measurement.dto.SaveMeasurementRequest(
+                        date,
+                        BigDecimal.valueOf(weightKg),
+                        BigDecimal.valueOf(neckCm),
+                        BigDecimal.valueOf(waistCm),
+                        hipCm != null ? BigDecimal.valueOf(hipCm) : null,
+                        BigDecimal.valueOf(chestCm),
+                        BigDecimal.valueOf(bicepCm),
+                        BigDecimal.valueOf(thighCm),
+                        BigDecimal.valueOf(calfCm),
+                        null
+                );
+        measurementService.save(cu, req);
     }
 
     private void seedCheckIn(java.util.UUID userId, LocalDate weekStart,
