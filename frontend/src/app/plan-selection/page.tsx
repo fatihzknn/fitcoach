@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, Star, AlertTriangle, Check } from "lucide-react";
+import { ChevronDown, ChevronUp, Star, AlertTriangle, Check, Loader2 } from "lucide-react";
 import { Wordmark } from "@/components/wordmark";
 import { Button } from "@/components/ui/button";
 import {
@@ -165,6 +165,45 @@ function PlanCard({ plan, option, isRecommended, submitting, onSelect }: PlanCar
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Personalizing overlay — shown while the selected plan is being saved
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PERSONALIZING_STEPS = [
+  "Analyzing your profile…",
+  "Applying your training philosophy…",
+  "Building your personalized program…",
+  "Finalizing your plan…",
+];
+
+function PersonalizingOverlay() {
+  const { t } = useI18n();
+  const [step, setStep] = React.useState(0);
+
+  React.useEffect(() => {
+    const id = setInterval(
+      () => setStep((s) => (s + 1) % PERSONALIZING_STEPS.length),
+      900,
+    );
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 px-6">
+      <div className="w-full max-w-sm text-center space-y-6 animate-fade-up">
+        <div className="flex items-center justify-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/15">
+            <Loader2 className="h-8 w-8 text-primary animate-spin" />
+          </div>
+        </div>
+        <p className="font-display text-xl font-bold tracking-tight">
+          {t(PERSONALIZING_STEPS[step] ?? PERSONALIZING_STEPS[0]!)}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Page
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -227,7 +266,13 @@ export default function PlanSelectionPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await api.selectPlan({ option, trainerId: selectedTrainerId ?? undefined });
+      // Minimum display time so the personalizing overlay reads as real
+      // work happening, even when the API responds instantly.
+      const minDelay = new Promise((resolve) => setTimeout(resolve, 2400));
+      await Promise.all([
+        api.selectPlan({ option, trainerId: selectedTrainerId ?? undefined }),
+        minDelay,
+      ]);
       session.setPlanSelected();
       router.replace("/today");
     } catch (err: unknown) {
@@ -338,6 +383,8 @@ export default function PlanSelectionPage() {
           </div>
         )}
       </div>
+
+      {submitting && <PersonalizingOverlay />}
     </main>
   );
 }

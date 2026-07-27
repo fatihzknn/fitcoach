@@ -8,6 +8,7 @@ import com.fitcoach.profile.FitnessProfile;
 import com.fitcoach.profile.FitnessProfileRepository;
 import com.fitcoach.trainer.TrainerPhilosophy;
 import com.fitcoach.trainer.TrainerPhilosophyRepository;
+import com.fitcoach.trainer.TrainerVisibility;
 import com.fitcoach.workout.domain.PlanOption;
 import com.fitcoach.workout.dto.PlanOptionsResponse;
 import com.fitcoach.workout.dto.SelectPlanRequest;
@@ -47,7 +48,7 @@ public class WorkoutPlanService {
     public PlanOptionsResponse getPlanOptions(CurrentUser currentUser, UUID trainerId) {
         FitnessProfile profile = requireProfile(currentUser.id());
         Map<String, Exercise> byName = loadExercisesByName();
-        TrainerPhilosophy trainer = resolveTrainer(trainerId);
+        TrainerPhilosophy trainer = resolveTrainer(trainerId, profile);
         return generationService.generateOptions(profile, byName, trainer);
     }
 
@@ -61,7 +62,7 @@ public class WorkoutPlanService {
         Map<UUID, Exercise> byId = allExercises.stream()
                 .collect(Collectors.toMap(Exercise::getId, e -> e));
 
-        TrainerPhilosophy trainer = resolveTrainer(request.trainerId());
+        TrainerPhilosophy trainer = resolveTrainer(request.trainerId(), profile);
         PlanOptionsResponse options = generationService.generateOptions(profile, byName, trainer);
         WorkoutPlanDto chosenDto = request.option() == PlanOption.RECOMMENDED
                 ? options.recommended()
@@ -114,11 +115,21 @@ public class WorkoutPlanService {
         return WorkoutPlanDto.from(plan);
     }
 
-    /** Returns the trainer by ID, or the first (default) trainer if no ID supplied. */
-    private TrainerPhilosophy resolveTrainer(UUID trainerId) {
+    /**
+     * Returns the trainer by ID, or the first (default) trainer if no ID supplied.
+     * Rejects a trainer that isn't visible to the user's profile sex (e.g. a
+     * physiology-specific philosophy requested by someone it isn't meant for) — the
+     * normal UI flow only ever offers sex-appropriate trainers via GET /api/trainers,
+     * so this only triggers on direct/malformed API use.
+     */
+    private TrainerPhilosophy resolveTrainer(UUID trainerId, FitnessProfile profile) {
         if (trainerId != null) {
-            return trainerRepository.findById(trainerId)
+            TrainerPhilosophy trainer = trainerRepository.findById(trainerId)
                     .orElseThrow(() -> new NotFoundException("Trainer philosophy not found."));
+            if (!TrainerVisibility.isVisible(trainer.getTargetSex(), profile.getSex().name())) {
+                throw new NotFoundException("Trainer philosophy not found.");
+            }
+            return trainer;
         }
         return trainerRepository.findAllByOrderBySortOrderAsc()
                 .stream().findFirst()

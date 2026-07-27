@@ -105,6 +105,10 @@ export const tr: Record<string, string> = {
   "Expand": "Genişlet",
   "Could not load plans. Please try again.": "Planlar yüklenemedi. Lütfen tekrar dene.",
   "Could not save plan. Please try again.": "Plan kaydedilemedi. Lütfen tekrar dene.",
+  "Analyzing your profile…": "Profilin analiz ediliyor…",
+  "Applying your training philosophy…": "Antrenman felsefen uygulanıyor…",
+  "Building your personalized program…": "Sana özel program oluşturuluyor…",
+  "Finalizing your plan…": "Planın son haline getiriliyor…",
   "Day {n}": "Gün {n}",
 
   // ─── Today ─────────────────────────────────────────────────────────────────

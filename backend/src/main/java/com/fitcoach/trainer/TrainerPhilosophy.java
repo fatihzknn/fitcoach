@@ -61,6 +61,10 @@ public class TrainerPhilosophy extends BaseEntity {
     @Column(name = "sort_order", nullable = false)
     private int sortOrder;
 
+    /** Null = visible to everyone. Otherwise must match FitnessProfile.sex.name() exactly. */
+    @Column(name = "target_sex")
+    private String targetSex;
+
     protected TrainerPhilosophy() {}
 
     public UUID getId() { return id; }
@@ -79,4 +83,5 @@ public class TrainerPhilosophy extends BaseEntity {
     public int getSetsIsolation() { return setsIsolation; }
     public int getDeloadFrequencyWeeks() { return deloadFrequencyWeeks; }
     public int getSortOrder() { return sortOrder; }
+    public String getTargetSex() { return targetSex; }
 }

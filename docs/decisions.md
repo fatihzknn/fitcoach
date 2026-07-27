@@ -306,3 +306,43 @@ left a detail open and a reasonable assumption was chosen instead of asking.
   preferences), and linking `EvidenceCitationService` retrieval to the active
   trainer's slug so the AI coach leans on that trainer's real source more heavily
   when relevant.
+
+## Phase 10-continued (2) — Trainer sex-gating + plan-selection personalization UX
+
+Direct user feedback after testing: "kadın seçmediğim halde kadın programını
+seçebiliyor olmam doğru değil" (being able to select the women's-physiology
+trainer without having a female profile isn't right) — the 5th trainer added
+this session was visible/selectable by everyone.
+
+- **`target_sex` column (V13)** on `trainer_philosophies`, nullable — null means
+  visible to everyone (the 4 general trainers), otherwise must exactly match
+  `FitnessProfile.sex.name()`. Only `womens-physiology-focused` is gated
+  (`FEMALE`).
+- **Two enforcement layers**, both using a new plain static
+  `TrainerVisibility.isVisible(targetSex, userSex)` utility (not an instance
+  method on the entity — Mockito mocks don't execute real method bodies by
+  default, so entity behavior methods are awkward to unit test with this
+  codebase's existing mock-heavy style; a static pure function stays trivially
+  testable and matches the `TrainerExercisePreferences` precedent):
+  1. `GET /api/trainers` filters the list server-side by the caller's profile
+     sex — the UI never shows an inappropriate trainer in the first place.
+  2. `WorkoutPlanService.resolveTrainer()` independently re-validates on
+     `getPlanOptions`/`selectPlan` and rejects a mismatched `trainerId` with
+     404 — defense in depth against direct API calls that bypass the filtered
+     list (verified live: a male demo user's direct request for the women's
+     trainer's ID returns 404; a female test user's request for the same ID
+     succeeds).
+  3. If no `FitnessProfile` is found at all (shouldn't happen post-onboarding),
+     the trainer list falls back to sex-neutral trainers only, not an error.
+- **Plan-selection loading UX**: user also asked for the plan-generation step
+  to feel like real personalization is happening rather than an instant swap.
+  Added `PersonalizingOverlay` (frontend, `plan-selection/page.tsx`) — a
+  full-screen overlay with rotating status text ("Analyzing your profile…",
+  "Applying your training philosophy…", "Building your personalized
+  program…", "Finalizing your plan…") shown while `selectPlan` is in flight,
+  with an enforced ~2.4s minimum display time (`Promise.all` with a timer) so
+  it doesn't just flash even when the API responds instantly. Wording was
+  kept honest — it describes what genuinely happens (profile + trainer
+  selection do drive the deterministic rule engine), not a fabricated "AI is
+  analyzing you" claim, consistent with CLAUDE.md's deterministic-generation
+  principle.
