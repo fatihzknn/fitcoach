@@ -2,6 +2,9 @@ package com.fitcoach.coach.provider;
 
 import com.fitcoach.coach.CoachContext;
 import com.fitcoach.coach.CoachPrinciple;
+import com.fitcoach.coach.evidence.EvidenceCitationService;
+import com.fitcoach.coach.evidence.EvidenceClaim;
+import com.fitcoach.coach.evidence.EvidenceTopic;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
@@ -12,11 +15,22 @@ import java.util.List;
 /**
  * Rule-based coach that responds to keywords. Active when no real AI provider bean
  * is present (i.e. always in development until OpenAI key is wired).
+ *
+ * Responses are grounded with real, cited claims from EvidenceCitationService where
+ * safe to do so (recovery, technique, volume, strength, muscle, nutrition, progress,
+ * motivation). Pain guidance is deliberately never enriched with retrieved data —
+ * it stays a fixed, reviewed safety response.
  */
 @Component
 @Primary
 @ConditionalOnMissingBean(name = "openAiCoachAiProvider")
 public class MockCoachAiProvider implements CoachAiProvider {
+
+    private final EvidenceCitationService citationService;
+
+    public MockCoachAiProvider(EvidenceCitationService citationService) {
+        this.citationService = citationService;
+    }
 
     @Override
     public String generateResponse(String userMessage, CoachContext ctx) {
@@ -101,7 +115,7 @@ public class MockCoachAiProvider implements CoachAiProvider {
         base += "With " + ctx.trainingDaysPerWeek() + " sessions per week, you have " +
                 (7 - ctx.trainingDaysPerWeek()) + " recovery days built in. " +
                 "Make sure you're sleeping 7–9 hours — that's when the muscle repair actually occurs.";
-        return base;
+        return base + citeQuote(EvidenceTopic.RECOVERY);
     }
 
     private String motivationResponse(CoachContext ctx) {
@@ -118,7 +132,7 @@ public class MockCoachAiProvider implements CoachAiProvider {
             base += "Every expert was once a beginner who just decided to start. " +
                     "Your plan is ready — the only thing left is to begin.";
         }
-        return base;
+        return base + citeQuote(EvidenceTopic.MOTIVATION);
     }
 
     private String techniqueResponse(CoachContext ctx) {
@@ -130,7 +144,7 @@ public class MockCoachAiProvider implements CoachAiProvider {
         base += "For any specific exercise in your " + (ctx.activePlanName() != null ? ctx.activePlanName() : "plan") +
                 ", I've included form cues and common mistakes in the exercise detail. " +
                 "Could you tell me which exercise you want help with? I can give you more targeted coaching.";
-        return base;
+        return base + citeQuote(EvidenceTopic.TECHNIQUE);
     }
 
     private String volumeResponse(CoachContext ctx) {
@@ -143,7 +157,7 @@ public class MockCoachAiProvider implements CoachAiProvider {
                 " level and " + ctx.trainingDaysPerWeek() + " training days. " +
                 "It lands in the right volume range for your experience. " +
                 "If you want to add more, start by adding one extra set per muscle group per week — not per session.";
-        return base;
+        return base + citeQuote(EvidenceTopic.VOLUME);
     }
 
     private String strengthResponse(CoachContext ctx) {
@@ -153,7 +167,8 @@ public class MockCoachAiProvider implements CoachAiProvider {
                 "For " + ctx.userName() + " with your background, the key lifts to focus on are the " +
                 "compound movements in your plan — they give you the most strength return per session. " +
                 "Isolation work supports them but shouldn't replace them.\n\n" +
-                "Are you hitting a specific lift you want to improve? Tell me more.";
+                "Are you hitting a specific lift you want to improve? Tell me more." +
+                citeQuote(EvidenceTopic.STRENGTH);
     }
 
     private String muscleResponse(CoachContext ctx) {
@@ -163,7 +178,8 @@ public class MockCoachAiProvider implements CoachAiProvider {
                 "Volume: 10–20 sets per muscle group per week. Your " + ctx.trainingDaysPerWeek() +
                 "-day plan is designed to hit this for your main muscle groups.\n\n" +
                 "Muscle gain is slow — expect 0.5–1kg per month in ideal conditions as a " +
-                formatBackground(ctx.trainingBackground()) + ". Don't let the scale fool you; take progress photos and track strength.";
+                formatBackground(ctx.trainingBackground()) + ". Don't let the scale fool you; take progress photos and track strength." +
+                citeQuote(EvidenceTopic.MUSCLE);
     }
 
     private String fatLossResponse(CoachContext ctx) {
@@ -174,7 +190,8 @@ public class MockCoachAiProvider implements CoachAiProvider {
                 "• A modest deficit (300–500 kcal/day) is more sustainable than aggressive restriction\n" +
                 "• Keep protein high (1.8–2.2g/kg) to protect muscle during a cut\n" +
                 "• Don't add excessive cardio on top of your programme straight away — it adds fatigue without proportional return\n\n" +
-                "Keep showing up, log your sessions, and the compound effect will do the work.";
+                "Keep showing up, log your sessions, and the compound effect will do the work." +
+                citeQuote(EvidenceTopic.NUTRITION);
     }
 
     private String progressResponse(CoachContext ctx) {
@@ -188,7 +205,7 @@ public class MockCoachAiProvider implements CoachAiProvider {
         if (p != null) {
             base += p.getContent();
         }
-        return base;
+        return base + citeQuote(EvidenceTopic.PROGRESS);
     }
 
     private String greetingResponse(CoachContext ctx) {
@@ -215,6 +232,17 @@ public class MockCoachAiProvider implements CoachAiProvider {
         }
         base += "Is there a more specific aspect of your training you'd like to dig into?";
         return base;
+    }
+
+    // ─── Evidence citation ──────────────────────────────────────────────────────
+
+    /** Appends a short, cited quote from real trainer content, or "" if none found. */
+    private String citeQuote(EvidenceTopic topic) {
+        List<EvidenceClaim> found = citationService.findOne(topic);
+        if (found.isEmpty()) return "";
+        EvidenceClaim c = found.get(0);
+        String quote = c.getEvidenceQuote() != null ? c.getEvidenceQuote() : c.getClaim();
+        return "\n\nOne more thing, backed by real coaching content — " + c.getCreatorName() + ": \"" + quote + "\"";
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────

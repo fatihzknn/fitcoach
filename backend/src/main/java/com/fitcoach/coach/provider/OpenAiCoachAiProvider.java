@@ -4,10 +4,14 @@ import com.fitcoach.coach.CoachContext;
 import com.fitcoach.coach.CoachPrinciple;
 import com.fitcoach.coach.ChatMessage;
 import com.fitcoach.coach.domain.MessageRole;
+import com.fitcoach.coach.evidence.EvidenceCitationService;
+import com.fitcoach.coach.evidence.EvidenceClaim;
+import com.fitcoach.coach.evidence.EvidenceTopic;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import java.util.Arrays;
 import java.util.stream.Collectors;
 
 /**
@@ -27,6 +31,12 @@ public class OpenAiCoachAiProvider implements CoachAiProvider {
     @Value("${app.openai.model:gpt-4o-mini}")
     private String model;
 
+    private final EvidenceCitationService citationService;
+
+    public OpenAiCoachAiProvider(EvidenceCitationService citationService) {
+        this.citationService = citationService;
+    }
+
     @Override
     public String generateResponse(String userMessage, CoachContext context) {
         String systemPrompt = buildSystemPrompt(context);
@@ -42,6 +52,11 @@ public class OpenAiCoachAiProvider implements CoachAiProvider {
 
         String history = ctx.recentHistory().stream()
                 .map(m -> (m.getRole() == MessageRole.USER ? "User: " : "Coach: ") + m.getContent())
+                .collect(Collectors.joining("\n"));
+
+        String evidence = Arrays.stream(EvidenceTopic.values())
+                .flatMap(topic -> citationService.findOne(topic).stream())
+                .map(this::formatEvidence)
                 .collect(Collectors.joining("\n"));
 
         return """
@@ -61,6 +76,10 @@ public class OpenAiCoachAiProvider implements CoachAiProvider {
                 Coach principles you follow:
                 %s
 
+                Real, cited claims from trainer content you may draw on (cite the creator by name
+                when you use one; never invent a citation that isn't in this list):
+                %s
+
                 Recent conversation:
                 %s
 
@@ -74,7 +93,13 @@ public class OpenAiCoachAiProvider implements CoachAiProvider {
                 ctx.activePlanName() != null ? ctx.activePlanName() : "none",
                 String.join("; ", ctx.recentSessionSummaries()),
                 principles,
+                evidence,
                 history
         );
+    }
+
+    private String formatEvidence(EvidenceClaim c) {
+        return "- [" + c.getDomain() + "] " + c.getClaim() + " — " + c.getCreatorName() +
+                (c.getEvidenceQuote() != null ? " (\"" + c.getEvidenceQuote() + "\")" : "");
     }
 }

@@ -220,3 +220,39 @@ left a detail open and a reasonable assumption was chosen instead of asking.
   falling back to `SERVER_PORT`, then 8080.
 - Deployment runbook: `docs/deployment.md` (Neon + Railway + Vercel, all free tier).
   Local dev flow is unchanged.
+
+## Phase 6 (partial) — AI Coach grounded in real trainer content
+
+- User supplied a `data/` pipeline (YouTube transcript scraping → Claude-extracted
+  evidence cards) covering 6 sources: Ağır Sağlam, Güray Aydın, Jeff Nippard,
+  Renaissance Periodization, Dr. Stacy Sims, and a PubMed research corpus.
+  The pipeline's *final* aggregation step (`trainer_philosophies.json`, meant to
+  replace the 4 seeded `TrainerPhilosophy` rows) was found broken on inspection:
+  2 of the richest sources (Stacy Sims — 370 cards, Renaissance Periodization —
+  398 cards) were missing entirely, 3 of the 4 entries that did make it were
+  missing required fields, and no numeric programming parameters (rep ranges,
+  RIR, rest) were extracted anywhere — so it cannot replace the trainer
+  philosophy cards used by `WorkoutGenerationService`.
+- The intermediate `evidence_cards` layer, however, is well-structured (4486
+  claims, each with a domain, a real quote, and a cited source) — decided to use
+  this to ground the **AI coach chat** instead. New `evidence_claims` table
+  (V11) is populated at startup by `EvidenceDataLoader`, reading bundled JSONL
+  (`backend/src/main/resources/coach-data/`, ~2.1MB, copied from the source
+  `data/derived/evidence_cards/` — the 199MB `data/` folder itself stays
+  untracked and outside the repo).
+- **Safety**: `injury_safety` and `safety` domain claims (203+2 rows) are
+  excluded at load time, not just at query time — so they can never surface
+  through the coach even if retrieval logic changes later. The hardcoded pain
+  response in `MockCoachAiProvider` is untouched by this change; a regression
+  test (`MockCoachAiProviderTest.painResponse_neverConsultsEvidenceService`)
+  asserts the evidence service is never even called for pain-flagged messages.
+- `EvidenceCitationService.findOne()` picks randomly from a small pool (top 8)
+  rather than always the same row, so repeated questions on the same topic
+  don't feel robotic.
+- `OpenAiCoachAiProvider` (still an unimplemented skeleton — no API key wired)
+  was updated to include the same evidence claims in its system prompt, so the
+  real LLM path is grounded too whenever it's implemented.
+- Verified end-to-end against local Docker Postgres before considering this
+  done: loader logged "4276 evidence claims loaded, 210 skipped" on first boot,
+  and a live coach chat request returned a real Dr. Stacy Sims quote on a
+  recovery question while a pain question stayed exactly as before.
