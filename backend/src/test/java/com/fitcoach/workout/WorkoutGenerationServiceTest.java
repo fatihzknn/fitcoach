@@ -11,9 +11,11 @@ import com.fitcoach.profile.domain.Sex;
 import com.fitcoach.profile.domain.TrainingBackground;
 import com.fitcoach.trainer.TrainerPhilosophy;
 import com.fitcoach.workout.dto.PlanOptionsResponse;
+import com.fitcoach.workout.dto.WorkoutPlanDto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -171,6 +173,65 @@ class WorkoutGenerationServiceTest {
         assertThat(firstExercise.repRangeMin()).isGreaterThanOrEqualTo(8);
     }
 
+    @Test
+    void substitutionAppliesForRegisteredSlug() {
+        FitnessProfile profile = profile(TrainingBackground.REGULAR, 4, MainGoal.MUSCLE_GAIN);
+        TrainerPhilosophy strengthTrainer = trainerWith(3, 6, 8, 12, 180, 90, 1, 5, 3,
+                "Strength Focused", "strength-focused");
+
+        PlanOptionsResponse result = service.generateOptions(profile, exercises, strengthTrainer);
+
+        // Upper B (day index 2) starts with "Dumbbell Bench Press" in the template;
+        // strength-focused prefers "Barbell Bench Press" for that slot.
+        var upperB = result.recommended().days().get(2);
+        assertThat(upperB.workoutName()).isEqualTo("Upper B");
+        assertThat(upperB.exercises().get(0).exercise().name()).isEqualTo("Barbell Bench Press");
+    }
+
+    @Test
+    void noSubstitutionForUnregisteredSlug() {
+        // defaultTrainer has no stubbed slug (Mockito default: null) — behavior must
+        // match the literal template names exactly, same as before substitution existed.
+        FitnessProfile profile = profile(TrainingBackground.REGULAR, 3, MainGoal.MUSCLE_GAIN);
+
+        PlanOptionsResponse result = service.generateOptions(profile, exercises, defaultTrainer);
+
+        var day1 = result.recommended().days().get(0);
+        assertThat(day1.exercises().get(0).exercise().name()).isEqualTo("Barbell Bench Press");
+    }
+
+    @Test
+    void noDuplicateExerciseWithinAnyDayAcrossAllTrainersAndTemplates() {
+        List<TrainerPhilosophy> trainers = List.of(
+                trainerWith(6, 20, 10, 30, 120, 60, 2, 4, 3, "Evidence-Based", "evidence-based"),
+                trainerWith(8, 12, 10, 15, 90, 60, 1, 4, 3, "Classic Bodybuilding", "classic-bodybuilding"),
+                trainerWith(3, 6, 8, 12, 180, 90, 1, 5, 3, "Strength Focused", "strength-focused"),
+                trainerWith(10, 15, 12, 20, 75, 45, 2, 3, 2, "Minimalist", "minimalist"),
+                trainerWith(5, 10, 8, 15, 150, 75, 2, 4, 3, "Women's Physiology Focused", "womens-physiology-focused")
+        );
+
+        for (TrainerPhilosophy trainer : trainers) {
+            for (TrainingBackground bg : TrainingBackground.values()) {
+                for (int days = 3; days <= 5; days++) {
+                    FitnessProfile profile = profile(bg, days, MainGoal.MUSCLE_GAIN);
+                    PlanOptionsResponse result = service.generateOptions(profile, exercises, trainer);
+
+                    for (WorkoutPlanDto planDto : List.of(result.recommended(), result.alternative())) {
+                        for (var day : planDto.days()) {
+                            List<String> names = day.exercises().stream()
+                                    .map(we -> we.exercise().name())
+                                    .toList();
+                            assertThat(names)
+                                    .as("Trainer %s, %s %d-day, day '%s' should have no duplicate exercises",
+                                            trainer.getDisplayName(), bg, days, day.workoutName())
+                                    .doesNotHaveDuplicates();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
@@ -204,6 +265,16 @@ class WorkoutGenerationServiceTest {
         when(t.getRirTarget()).thenReturn(rir);
         when(t.getSetsCompound()).thenReturn(cSets);
         when(t.getSetsIsolation()).thenReturn(iSets);
+        return t;
+    }
+
+    /** Same as above, but also stubs getSlug() so exercise-substitution logic activates. */
+    private TrainerPhilosophy trainerWith(int cRepMin, int cRepMax, int iRepMin, int iRepMax,
+                                           int restC, int restI, int rir,
+                                           int cSets, int iSets, String displayName, String slug) {
+        TrainerPhilosophy t = trainerWith(cRepMin, cRepMax, iRepMin, iRepMax, restC, restI, rir,
+                cSets, iSets, displayName);
+        when(t.getSlug()).thenReturn(slug);
         return t;
     }
 

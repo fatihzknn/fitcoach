@@ -256,3 +256,53 @@ left a detail open and a reasonable assumption was chosen instead of asking.
   done: loader logged "4276 evidence claims loaded, 210 skipped" on first boot,
   and a live coach chat request returned a real Dr. Stacy Sims quote on a
   recovery question while a pain question stayed exactly as before.
+
+## Phase 10-continued — Trainer choice now affects exercise selection, not just numbers
+
+- Discussed directly with the user (RAG explainer, "kadınlara özel" section, and
+  "is the plan still default regardless of trainer?" — all three questions were
+  connected): trainer philosophy previously only changed numeric prescription
+  (sets/reps/rest/RIR) via `TemplateParams`; the exercises and day structure were
+  byte-identical across all trainers. Fixed via `TrainerExercisePreferences`
+  (`com.fitcoach.workout`) — a plain static `Map<slug, Map<canonicalName,
+  preferredName>>`, deliberately **not** a Spring bean (`WorkoutGenerationService`
+  is instantiated directly in its test, no Spring context).
+- **New 5th trainer**: `womens-physiology-focused` ("Women's Physiology Focused")
+  — numeric params grounded in real extracted claims from `evidence_claims`
+  (Dr. Stacy Sims source: ~80% 1RM sits at 3-5 reps, muscular-endurance work at
+  8-10 reps, 2-3x/week frequency) — heavy compound emphasis, deliberately **not**
+  a "light weights, toning" caricature. Per CLAUDE.md's non-negotiable rule
+  (never imitate an individual real coach's identity/name), the display name is
+  synthesized/generic, matching the pattern of the 4 existing trainers — the
+  product never says "Dr. Stacy Sims" anywhere user-facing.
+- **Real bug caught by a Plan-agent validation pass before implementation**: a
+  naive per-slot substitution is unsafe because several templates deliberately
+  place multiple members of the same exercise family in one day (e.g. `buildPPL`'s
+  "Push" day contains both Barbell Bench Press and Chest Press Machine
+  simultaneously). A context-free substitution would silently duplicate an
+  exercise within a day. Fixed with `daySlots(...)`, which resolves a whole day's
+  slots together against two guards: the day's own literal canonical names, and
+  names already resolved-into by earlier slots in the same day. Regression-tested
+  by `noDuplicateExerciseWithinAnyDayAcrossAllTrainersAndTemplates` (iterates all
+  5 real trainer slugs × every background × 3-5 days) — this test caught a second,
+  more subtle version of the same bug class during implementation (the literal
+  canonical-name fallback path wasn't being checked against `usedNames`) before
+  it ever reached the database.
+- Substitution pairs are curated to stay within the same `MovementPattern` bucket
+  (compound vs. isolation) — crossing it would silently apply the wrong numeric
+  prescription to a substituted exercise. `evidence-based` has no exercise
+  overrides at all — its differentiator is frequency/volume, not implement choice.
+- Verified end-to-end against local Docker Postgres: `GET /api/trainers` returns
+  5 rows; `GET /api/plan/options` for evidence-based vs. womens-physiology-focused
+  on the same profile shows real, expected differences (Cable Row → Dumbbell Row,
+  Leg Press → Goblet Squat, Dumbbell Bench Press → Barbell Bench Press) with zero
+  duplicate exercises in any day, including a day where the substitution correctly
+  no-ops because the target already appears elsewhere that day (Lower B: Goblet
+  Squat already present, so Leg Press → Goblet Squat is correctly skipped there).
+- Frontend required **zero changes** — `plan-selection/page.tsx` already renders
+  `trainers.map(...)` generically; the 5th trainer appears automatically.
+- Deferred to a later phase (per explicit user agreement): letting users select
+  *multiple* trainers at once for a "combined" program (intersection of exercise
+  preferences), and linking `EvidenceCitationService` retrieval to the active
+  trainer's slug so the AI coach leans on that trainer's real source more heavily
+  when relevant.
