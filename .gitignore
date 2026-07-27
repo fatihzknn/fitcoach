@@ -17,3 +17,8 @@ backend/target/
 frontend/node_modules/
 frontend/.next/
 frontend/out/
+
+# raw trainer-scraping pipeline output (subtitles, corpus, manifests) — 199MB,
+# lives outside the app; only the filtered evidence_cards subset needed at
+# runtime is committed under backend/src/main/resources/coach-data/
+/data/
