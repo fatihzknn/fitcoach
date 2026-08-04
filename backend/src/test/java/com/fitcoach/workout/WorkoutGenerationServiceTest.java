@@ -201,7 +201,7 @@ class WorkoutGenerationServiceTest {
     }
 
     @Test
-    void noDuplicateExerciseWithinAnyDayAcrossAllTrainersAndTemplates() {
+    void noDuplicateExerciseWithinAnyDayAcrossAllTrainersTemplatesAndPainAreas() {
         List<TrainerPhilosophy> trainers = List.of(
                 trainerWith(6, 20, 10, 30, 120, 60, 2, 4, 3, "Evidence-Based", "evidence-based"),
                 trainerWith(8, 12, 10, 15, 90, 60, 1, 4, 3, "Classic Bodybuilding", "classic-bodybuilding"),
@@ -209,22 +209,31 @@ class WorkoutGenerationServiceTest {
                 trainerWith(10, 15, 12, 20, 75, 45, 2, 3, 2, "Minimalist", "minimalist"),
                 trainerWith(5, 10, 8, 15, 150, 75, 2, 4, 3, "Women's Physiology Focused", "womens-physiology-focused")
         );
+        List<Set<PainArea>> painCombos = List.of(
+                Set.of(PainArea.NONE),
+                Set.of(PainArea.KNEE),
+                Set.of(PainArea.LOWER_BACK),
+                Set.of(PainArea.SHOULDER),
+                Set.of(PainArea.KNEE, PainArea.LOWER_BACK, PainArea.SHOULDER)
+        );
 
         for (TrainerPhilosophy trainer : trainers) {
-            for (TrainingBackground bg : TrainingBackground.values()) {
-                for (int days = 3; days <= 5; days++) {
-                    FitnessProfile profile = profile(bg, days, MainGoal.MUSCLE_GAIN);
-                    PlanOptionsResponse result = service.generateOptions(profile, exercises, trainer);
+            for (Set<PainArea> painAreas : painCombos) {
+                for (TrainingBackground bg : TrainingBackground.values()) {
+                    for (int days = 3; days <= 5; days++) {
+                        FitnessProfile profile = profileWithPain(bg, days, MainGoal.MUSCLE_GAIN, painAreas);
+                        PlanOptionsResponse result = service.generateOptions(profile, exercises, trainer);
 
-                    for (WorkoutPlanDto planDto : List.of(result.recommended(), result.alternative())) {
-                        for (var day : planDto.days()) {
-                            List<String> names = day.exercises().stream()
-                                    .map(we -> we.exercise().name())
-                                    .toList();
-                            assertThat(names)
-                                    .as("Trainer %s, %s %d-day, day '%s' should have no duplicate exercises",
-                                            trainer.getDisplayName(), bg, days, day.workoutName())
-                                    .doesNotHaveDuplicates();
+                        for (WorkoutPlanDto planDto : List.of(result.recommended(), result.alternative())) {
+                            for (var day : planDto.days()) {
+                                List<String> names = day.exercises().stream()
+                                        .map(we -> we.exercise().name())
+                                        .toList();
+                                assertThat(names)
+                                        .as("Trainer %s, pain %s, %s %d-day, day '%s' should have no duplicate exercises",
+                                                trainer.getDisplayName(), painAreas, bg, days, day.workoutName())
+                                        .doesNotHaveDuplicates();
+                            }
                         }
                     }
                 }
@@ -232,11 +241,113 @@ class WorkoutGenerationServiceTest {
         }
     }
 
+    @Test
+    void kneeProfileAvoidsLegExtension() {
+        // STARTING+3's alternative (Machine-Friendly Full Body), "Full Body B" has
+        // Leg Extension but not Leg Curl, so the substitution isn't blocked by the
+        // in-day collision guard — a clean day to verify the avoidance itself. (Other
+        // days in this template legitimately keep Leg Extension because Leg Curl is
+        // already present there — that's the collision guard working correctly, not
+        // a place this test should assert on.)
+        FitnessProfile profile = profileWithPain(TrainingBackground.STARTING, 3, MainGoal.MUSCLE_GAIN,
+                Set.of(PainArea.KNEE));
+
+        PlanOptionsResponse result = service.generateOptions(profile, exercises, defaultTrainer);
+
+        List<String> fullBodyB = exercisesInDay(result.alternative(), "Full Body B");
+        assertThat(fullBodyB).doesNotContain("Leg Extension");
+        assertThat(fullBodyB).contains("Leg Curl");
+    }
+
+    @Test
+    void lowerBackProfileAvoidsRomanianDeadlift() {
+        // REGULAR+3's recommended (Full Body 3-Day), "Full Body A" has Romanian
+        // Deadlift but not Hip Thrust, so the substitution isn't blocked by the
+        // in-day collision guard.
+        FitnessProfile profile = profileWithPain(TrainingBackground.REGULAR, 3, MainGoal.MUSCLE_GAIN,
+                Set.of(PainArea.LOWER_BACK));
+
+        PlanOptionsResponse result = service.generateOptions(profile, exercises, defaultTrainer);
+
+        List<String> fullBodyA = exercisesInDay(result.recommended(), "Full Body A");
+        assertThat(fullBodyA).doesNotContain("Romanian Deadlift");
+        assertThat(fullBodyA).contains("Hip Thrust");
+    }
+
+    @Test
+    void shoulderProfileAvoidsOverheadPress() {
+        // STARTING+4's recommended (Upper/Lower Split), "Upper A" has Overhead Press
+        // but not Chest Press Machine, so the substitution isn't blocked. ("Upper B"
+        // in the same plan legitimately keeps Overhead Press because Chest Press
+        // Machine is already present there.)
+        FitnessProfile profile = profileWithPain(TrainingBackground.STARTING, 4, MainGoal.MUSCLE_GAIN,
+                Set.of(PainArea.SHOULDER));
+
+        PlanOptionsResponse result = service.generateOptions(profile, exercises, defaultTrainer);
+
+        List<String> upperA = exercisesInDay(result.recommended(), "Upper A");
+        assertThat(upperA).doesNotContain("Overhead Press");
+        assertThat(upperA).contains("Chest Press Machine");
+    }
+
+    @Test
+    void noPainProfileKeepsOverheadPress() {
+        // Regression guard: a NONE-pain profile must still get the literal template
+        // exercise in the same day, same as before pain avoidance existed.
+        FitnessProfile profile = profile(TrainingBackground.STARTING, 4, MainGoal.MUSCLE_GAIN);
+
+        PlanOptionsResponse result = service.generateOptions(profile, exercises, defaultTrainer);
+
+        assertThat(exercisesInDay(result.recommended(), "Upper A")).contains("Overhead Press");
+    }
+
+    @Test
+    void painAvoidanceTakesPriorityOverTrainerPreference() {
+        // Both the LOWER_BACK avoidance rule and the womens-physiology-focused trainer
+        // target the same substitution (Romanian Deadlift -> Hip Thrust) — same outcome
+        // either way, but this confirms pain resolution runs first without error and
+        // the two sources don't conflict when they happen to agree.
+        FitnessProfile profile = profileWithPain(TrainingBackground.REGULAR, 3, MainGoal.MUSCLE_GAIN,
+                Set.of(PainArea.LOWER_BACK));
+        TrainerPhilosophy womensTrainer = trainerWith(5, 10, 8, 15, 150, 75, 2, 4, 3,
+                "Women's Physiology Focused", "womens-physiology-focused");
+
+        PlanOptionsResponse result = service.generateOptions(profile, exercises, womensTrainer);
+
+        List<String> fullBodyA = exercisesInDay(result.recommended(), "Full Body A");
+        assertThat(fullBodyA).doesNotContain("Romanian Deadlift");
+        assertThat(fullBodyA).contains("Hip Thrust");
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
 
+    private List<String> allExerciseNames(WorkoutPlanDto plan) {
+        return plan.days().stream()
+                .flatMap(day -> day.exercises().stream())
+                .map(we -> we.exercise().name())
+                .toList();
+    }
+
+    /** Exercise names for the first day matching this workout name (day names can
+     *  repeat across an alternating split, e.g. "Full Body A" on both day 1 and 3). */
+    private List<String> exercisesInDay(WorkoutPlanDto plan, String workoutName) {
+        return plan.days().stream()
+                .filter(day -> day.workoutName().equals(workoutName))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No day named '" + workoutName + "' in plan " + plan.name()))
+                .exercises().stream()
+                .map(we -> we.exercise().name())
+                .toList();
+    }
+
     private FitnessProfile profile(TrainingBackground background, int days, MainGoal goal) {
+        return profileWithPain(background, days, goal, Set.of(PainArea.NONE));
+    }
+
+    private FitnessProfile profileWithPain(TrainingBackground background, int days, MainGoal goal,
+                                            Set<PainArea> painAreas) {
         FitnessProfile p = new FitnessProfile(UUID.randomUUID());
         p.setTrainingBackground(background);
         p.setTrainingDaysPerWeek(days);
@@ -246,7 +357,7 @@ class WorkoutGenerationServiceTest {
         p.setHeightCm(175);
         p.setWeightKg(75.0);
         p.setSessionDurationMinutes(60);
-        p.setPainAreas(Set.of(PainArea.NONE));
+        p.setPainAreas(painAreas);
         return p;
     }
 

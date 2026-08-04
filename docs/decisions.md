@@ -346,3 +346,54 @@ this session was visible/selectable by everyone.
   selection do drive the deterministic rule engine), not a fabricated "AI is
   analyzing you" claim, consistent with CLAUDE.md's deterministic-generation
   principle.
+
+## Phase 10-continued (3) — Pain-area-aware exercise selection
+
+User asked for "richer onboarding" as the first personalization step, offering
+equipment access as an example. **Redirected**: that specific example conflicts
+with CLAUDE.md's non-negotiable "do not ask users to enter a list of available
+equipment" rule — flagged this to the user rather than building it or silently
+substituting something else.
+
+Instead, checking what onboarding data *could* be wired up found a real gap:
+`FitnessProfile.painAreas` (Step 6 of onboarding) was collected and stored but
+used **nowhere in `WorkoutGenerationService`** — only `CoachService` read it (for
+AI coach context). A user reporting knee pain still got Leg Extension with zero
+avoidance. Fixed with zero new onboarding questions, zero migration, zero
+frontend changes — purely making the generator finally read data it already has.
+
+- **`PainAvoidancePreferences`** (`com.fitcoach.workout`, plain static utility,
+  same reasoning as `TrainerExercisePreferences`): a small, deliberately
+  conservative table — `KNEE`: Leg Extension → Leg Curl; `LOWER_BACK`: Romanian
+  Deadlift → Hip Thrust; `SHOULDER`: Overhead Press → Chest Press Machine.
+  `OTHER`/`NONE` have no automated overrides (too unstructured to safely
+  automate — same as before, handled by the existing in-session swap flow).
+  Only well-established, broadly-cited accommodations were included, not
+  clinical judgment calls; each pair stays within the same `MovementPattern`
+  bucket so the numeric prescription is never silently wrong.
+- **Priority order in `slot()`**: pain avoidance is checked *before* trainer
+  preference (safety before style), both reusing the exact same per-day
+  collision guard (`canonicalNamesInDay`/`usedNames`) built for trainer-driven
+  substitution earlier this session — extracted into a shared `safeCandidate()`
+  helper so both sources use identical collision logic.
+- Threaded `Set<PainArea> painAreas` through `daySlots()`/`slot()` from
+  `profile.getPainAreas()`, already available at every `build*()` call site
+  (mechanical addition to the ~43 existing `daySlots(...)` calls, same pattern
+  as the earlier `trainer` threading).
+- The regression-test class this needed (no duplicate exercise within a day) was
+  already built for the trainer-substitution work — extended
+  `noDuplicateExerciseWithinAnyDayAcrossAllTrainersAndTemplates` to also iterate
+  pain-area combinations. 75/75 backend tests pass.
+- Verified end-to-end against local Docker Postgres with three fresh test
+  profiles (KNEE/STARTING+3, LOWER_BACK/REGULAR+3, SHOULDER/STARTING+4): each
+  showed the correct substitution in the day where it wasn't blocked by the
+  collision guard, and correctly *kept* the original exercise in a day where the
+  substitute was already present elsewhere that day (e.g. "Upper B" in the
+  shoulder-pain plan legitimately keeps Overhead Press because Chest Press
+  Machine already appears there) — same intentional no-op behavior documented
+  for the trainer-substitution feature.
+
+**Also captured in project memory** (`product_roadmap.md`): the "living/adaptive
+plan" direction (progressive-overload nudges, deload detection using
+`SetLog`/`WeeklyCheckIn` history) and the trainer/coach-portal idea remain
+undesigned, separate future phases.
