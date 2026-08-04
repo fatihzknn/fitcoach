@@ -18,6 +18,8 @@ import com.fitcoach.workout.dto.WorkoutPlanDto;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -105,14 +107,32 @@ public class WorkoutPlanService {
         }
 
         WorkoutPlan saved = planRepository.save(plan);
-        return WorkoutPlanDto.from(saved);
+        return WorkoutPlanDto.from(saved, isDeloadRecommended(saved));
     }
 
     @Transactional(readOnly = true)
     public WorkoutPlanDto getActivePlan(CurrentUser currentUser) {
         WorkoutPlan plan = planRepository.findByUserIdAndIsActiveTrue(currentUser.id())
                 .orElseThrow(() -> new NotFoundException("No active workout plan. Select a plan first."));
-        return WorkoutPlanDto.from(plan);
+        return WorkoutPlanDto.from(plan, isDeloadRecommended(plan));
+    }
+
+    /**
+     * True once the plan has run at least as long as its trainer's recommended
+     * deload frequency — TrainerPhilosophy.deloadFrequencyWeeks has been seeded
+     * since Phase 9 but was never read anywhere until now.
+     */
+    private boolean isDeloadRecommended(WorkoutPlan plan) {
+        if (plan.getTrainerPhilosophyId() == null) return false;
+        return trainerRepository.findById(plan.getTrainerPhilosophyId())
+                .map(trainer -> {
+                    // ChronoUnit.WEEKS doesn't support Instant (a pure timestamp, not a
+                    // date) — go through DAYS instead.
+                    long daysElapsed = ChronoUnit.DAYS.between(plan.getCreatedAt(), Instant.now());
+                    long weeksElapsed = daysElapsed / 7;
+                    return weeksElapsed >= trainer.getDeloadFrequencyWeeks();
+                })
+                .orElse(false);
     }
 
     /**

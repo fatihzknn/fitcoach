@@ -117,6 +117,8 @@ export const tr: Record<string, string> = {
   "Hi, {name}.": "Merhaba, {name}.",
   "Good to see you.": "Seni görmek güzel.",
   "Weekly check-in ready": "Haftalık check-in hazır",
+  "Time for a deload week?": "Deload haftası zamanı mı?",
+  "You've been on this plan a while — ask your coach": "Bu plandasın bir süredir — koçuna sor",
   "Log your weight & how you feel": "Kilonu ve nasıl hissettiğini kaydet",
   "Your Plan": "Planın",
   "{a} exercises · {b} total sets": "{a} egzersiz · {b} toplam set",
@@ -140,6 +142,7 @@ export const tr: Record<string, string> = {
   "Last:": "Önceki:",
   "BW": "VA", // vücut ağırlığı
   "↑ Best": "↑ Rekor",
+  "↑ +2.5 kg suggested": "↑ +2.5 kg önerisi",
   "Swap": "Değiştir",
   "swapped": "değiştirildi",
   "Originally:": "Orijinal:",

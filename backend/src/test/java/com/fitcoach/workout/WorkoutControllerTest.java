@@ -111,7 +111,7 @@ class WorkoutControllerTest {
                 UUID.randomUUID(), name, MainGoal.MUSCLE_GAIN, days,
                 true, null,
                 List.of(new WorkoutDayDto(UUID.randomUUID(), 1, "Day 1", List.of())),
-                null, null
+                null, null, false
         );
     }
 }

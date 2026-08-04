@@ -184,6 +184,7 @@ export interface WorkoutPlanDto {
   days: WorkoutDayDto[];
   trainerPhilosophyId: string | null;
   trainerPhilosophyName: string | null;
+  deloadRecommended: boolean;
 }
 
 export interface PlanOptionsResponse {

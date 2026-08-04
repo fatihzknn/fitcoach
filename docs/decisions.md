@@ -397,3 +397,35 @@ frontend changes — purely making the generator finally read data it already ha
 plan" direction (progressive-overload nudges, deload detection using
 `SetLog`/`WeeklyCheckIn` history) and the trainer/coach-portal idea remain
 undesigned, separate future phases.
+
+## Phase — Living plan (Phase 1 of 2): progressive overload + deload nudge
+
+First of the two personalization directions from `product_roadmap` memory — the
+trainer/coach portal remains a distinct, later, undesigned phase.
+
+- **Progressive overload prefill** (`workout/[sessionId]/page.tsx`, `SetRow`):
+  the weight input already carried over last session's number; now if last
+  session's set hit the top of the prescribed rep range, it prefills
+  `previousWeight + 2.5kg` instead, with a small badge explaining why. Flat
+  +2.5kg, no per-exercise tuning — kept deliberately simple/predictable.
+  Frontend-only, no new data (`previous`/`prescribed` were already passed into
+  `SetRow`).
+- **Deload nudge**: `TrainerPhilosophy.deloadFrequencyWeeks` has been seeded on
+  every trainer since Phase 9 but was read nowhere until now.
+  `WorkoutPlanService.isDeloadRecommended()` compares weeks elapsed since the
+  active plan's `createdAt` against the trainer's frequency; exposed as
+  `WorkoutPlanDto.deloadRecommended`, surfaced on Today as a card linking to
+  `/coach` (already grounded with real recovery/deload evidence via
+  `EvidenceCitationService`).
+- **Real bug caught by the new `WorkoutPlanServiceTest`** (this service had zero
+  dedicated unit tests before — only exercised indirectly through
+  `WorkoutControllerTest`'s full mock): `ChronoUnit.WEEKS.between(Instant,
+  Instant)` throws `UnsupportedTemporalType` — `Instant` is a pure timestamp,
+  not a date, so calendar units like WEEKS aren't supported on it directly.
+  Fixed by going through `ChronoUnit.DAYS` and dividing by 7. Would have thrown
+  in production on the very first `GET /api/plan/active` call for any plan with
+  a linked trainer.
+- Verified end-to-end against local Docker Postgres: backdated a fresh test
+  plan's `created_at` by 8 weeks via direct SQL (Evidence-Based's
+  `deload_frequency_weeks` = 6) and confirmed `deloadRecommended` flips
+  `false → true` exactly at the threshold. 79/79 backend tests pass.

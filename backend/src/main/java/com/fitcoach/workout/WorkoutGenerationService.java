@@ -355,7 +355,8 @@ public class WorkoutGenerationService {
                 warning,
                 days,
                 trainer.getId(),
-                trainer.getDisplayName()
+                trainer.getDisplayName(),
+                false // a freshly-generated candidate plan is never deload-due
         );
     }
 

@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Dumbbell, ChevronRight, AlertTriangle, CheckCircle2, ClipboardList } from "lucide-react";
+import { Dumbbell, ChevronRight, AlertTriangle, CheckCircle2, ClipboardList, BatteryLow } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -128,6 +128,21 @@ export default function TodayPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium">{t("Weekly check-in ready")}</p>
                 <p className="text-xs text-muted-foreground">{t("Log your weight & how you feel")}</p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+            </div>
+          </Link>
+        )}
+
+        {/* Deload nudge — shown when the active plan has run past the trainer's
+            recommended deload frequency */}
+        {!loading && plan?.deloadRecommended && (
+          <Link href="/coach">
+            <div className="flex items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 hover:bg-amber-500/10 transition-colors">
+              <BatteryLow className="h-5 w-5 text-amber-500 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">{t("Time for a deload week?")}</p>
+                <p className="text-xs text-muted-foreground">{t("You've been on this plan a while — ask your coach")}</p>
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
             </div>

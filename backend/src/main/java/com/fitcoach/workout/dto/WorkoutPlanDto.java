@@ -15,9 +15,10 @@ public record WorkoutPlanDto(
         String sustainabilityWarning,
         List<WorkoutDayDto> days,
         UUID trainerPhilosophyId,
-        String trainerPhilosophyName
+        String trainerPhilosophyName,
+        boolean deloadRecommended
 ) {
-    public static WorkoutPlanDto from(WorkoutPlan plan) {
+    public static WorkoutPlanDto from(WorkoutPlan plan, boolean deloadRecommended) {
         return new WorkoutPlanDto(
                 plan.getId(),
                 plan.getName(),
@@ -27,7 +28,8 @@ public record WorkoutPlanDto(
                 plan.getSustainabilityWarning(),
                 plan.getDays().stream().map(WorkoutDayDto::from).toList(),
                 plan.getTrainerPhilosophyId(),
-                plan.getTrainerPhilosophyName()
+                plan.getTrainerPhilosophyName(),
+                deloadRecommended
         );
     }
 }

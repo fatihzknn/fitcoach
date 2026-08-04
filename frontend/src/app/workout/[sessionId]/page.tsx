@@ -241,8 +241,16 @@ function SetRow({
   disabled,
 }: SetRowProps) {
   const { t } = useI18n();
+  // If last session's set hit the top of the prescribed rep range, suggest a
+  // small weight increase instead of just repeating last time's number.
+  const suggestedWeight =
+    previous?.weightKg != null && previous.repsCompleted >= prescribed.repRangeMax
+      ? previous.weightKg + 2.5
+      : null;
+  const progressionSuggested = suggestedWeight !== null;
+
   const [weight, setWeight] = React.useState(
-    logged?.weightKg ?? previous?.weightKg?.toString() ?? "",
+    logged?.weightKg ?? suggestedWeight?.toString() ?? previous?.weightKg?.toString() ?? "",
   );
   const [reps, setReps] = React.useState(logged?.repsCompleted ?? "");
   const isDone = !!logged;
@@ -269,6 +277,11 @@ function SetRow({
         {isPr && isDone && (
           <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400">
             {t("↑ Best")}
+          </span>
+        )}
+        {!isDone && progressionSuggested && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+            {t("↑ +2.5 kg suggested")}
           </span>
         )}
         {!isPr && previous && (
