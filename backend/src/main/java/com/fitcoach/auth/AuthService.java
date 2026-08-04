@@ -48,7 +48,8 @@ public class AuthService {
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new ConflictException("An account with this email already exists.");
         }
-        User user = new User(email, passwordEncoder.encode(request.password()), request.displayName().trim());
+        Role role = request.isTrainer() ? Role.TRAINER : Role.USER;
+        User user = new User(email, passwordEncoder.encode(request.password()), request.displayName().trim(), role);
         userRepository.save(user);
         return new AuthResponse(jwtService.generateToken(user), UserDto.from(user), false);
     }

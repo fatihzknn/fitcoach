@@ -36,7 +36,7 @@ export default function RegisterPage() {
         password,
         displayName: displayName.trim(),
       });
-      session.start(res.token, res.onboardingCompleted);
+      session.start(res.token, res.onboardingCompleted, res.user.role);
       router.replace("/onboarding");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("Something went wrong. Try again."));

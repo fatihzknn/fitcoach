@@ -14,10 +14,13 @@ export interface HealthResponse {
   timestamp: string;
 }
 
+export type Role = "USER" | "TRAINER";
+
 export interface UserDto {
   id: string;
   email: string;
   displayName: string;
+  role: Role;
 }
 
 export interface AuthResponse {

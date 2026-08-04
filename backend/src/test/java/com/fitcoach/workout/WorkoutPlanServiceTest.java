@@ -1,5 +1,6 @@
 package com.fitcoach.workout;
 
+import com.fitcoach.auth.Role;
 import com.fitcoach.auth.jwt.CurrentUser;
 import com.fitcoach.exercise.ExerciseRepository;
 import com.fitcoach.profile.FitnessProfileRepository;
@@ -42,7 +43,7 @@ class WorkoutPlanServiceTest {
     private WorkoutPlanService service;
 
     private static final UUID USER_ID = UUID.randomUUID();
-    private static final CurrentUser CURRENT_USER = new CurrentUser(USER_ID, "test@example.com");
+    private static final CurrentUser CURRENT_USER = new CurrentUser(USER_ID, "test@example.com", Role.USER);
 
     private WorkoutPlan mockPlan(UUID trainerId, Instant createdAt) {
         WorkoutPlan plan = mock(WorkoutPlan.class);

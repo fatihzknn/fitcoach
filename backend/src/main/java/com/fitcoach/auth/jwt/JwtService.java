@@ -1,5 +1,6 @@
 package com.fitcoach.auth.jwt;
 
+import com.fitcoach.auth.Role;
 import com.fitcoach.auth.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -44,6 +45,7 @@ public class JwtService {
         return Jwts.builder()
                 .subject(user.getId().toString())
                 .claim("email", user.getEmail())
+                .claim("role", user.getRole().name())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(exp))
                 .signWith(key)
@@ -60,7 +62,13 @@ public class JwtService {
                     .getPayload();
             UUID userId = UUID.fromString(claims.getSubject());
             String email = claims.get("email", String.class);
-            return new CurrentUser(userId, email);
+            // Tokens minted before the TRAINER role existed have no "role" claim —
+            // every one of those accounts genuinely was a USER at the time, so
+            // defaulting a missing claim to USER reproduces old behavior exactly
+            // and nobody gets logged out by this change.
+            String roleClaim = claims.get("role", String.class);
+            Role role = roleClaim == null ? Role.USER : Role.valueOf(roleClaim);
+            return new CurrentUser(userId, email, role);
         } catch (JwtException | IllegalArgumentException ex) {
             return null;
         }

@@ -1,5 +1,6 @@
 package com.fitcoach.seeder;
 
+import com.fitcoach.auth.Role;
 import com.fitcoach.auth.User;
 import com.fitcoach.auth.UserRepository;
 import com.fitcoach.auth.jwt.CurrentUser;
@@ -102,7 +103,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         // ── 1. User ──────────────────────────────────────────────────────────
         User user = new User(DEMO_EMAIL, passwordEncoder.encode(DEMO_PASSWORD), "Alex Martinez");
         userRepository.save(user);
-        CurrentUser cu = new CurrentUser(user.getId(), DEMO_EMAIL);
+        CurrentUser cu = new CurrentUser(user.getId(), DEMO_EMAIL, Role.USER);
 
         // ── 2. Onboarding ────────────────────────────────────────────────────
         OnboardingRequest onboarding = new OnboardingRequest(

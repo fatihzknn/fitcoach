@@ -37,11 +37,15 @@ public class User extends BaseEntity {
     }
 
     public User(String email, String passwordHash, String displayName) {
+        this(email, passwordHash, displayName, Role.USER);
+    }
+
+    public User(String email, String passwordHash, String displayName, Role role) {
         this.id = UUID.randomUUID();
         this.email = email;
         this.passwordHash = passwordHash;
         this.displayName = displayName;
-        this.role = Role.USER;
+        this.role = role;
     }
 
     public UUID getId() {

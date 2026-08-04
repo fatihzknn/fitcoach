@@ -15,5 +15,7 @@ public record RegisterRequest(
 
         @NotBlank(message = "Name is required.")
         @Size(max = 80, message = "Name is too long.")
-        String displayName
+        String displayName,
+
+        boolean isTrainer
 ) {}

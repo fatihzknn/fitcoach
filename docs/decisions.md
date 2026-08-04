@@ -429,3 +429,48 @@ trainer/coach portal remains a distinct, later, undesigned phase.
   plan's `created_at` by 8 weeks via direct SQL (Evidence-Based's
   `deload_frequency_weeks` = 6) and confirmed `deloadRecommended` flips
   `false → true` exactly at the threshold. 79/79 backend tests pass.
+
+## Phase — Trainer portal, Phase A: role threading through auth
+
+First step of the trainer/coach portal (product_roadmap memory) — shipped
+separately from the roster/dashboard work (Phase B) because
+`JwtAuthenticationFilter`/`JwtService.parse()` sits in front of *every*
+authenticated request in the app; a bug here has the largest possible blast
+radius of anything in this feature. Verify this alone before building on it.
+
+- `Role` enum gains `TRAINER` (was `USER`-only). `User`/`RegisterRequest` gain
+  a way to create a trainer account (`isTrainer: boolean` on registration —
+  a narrow signup toggle, not the `Role` enum directly, since `Role` may grow
+  further values later that registration shouldn't expose 1:1).
+- `CurrentUser` (the JWT principal used by every `@AuthenticationPrincipal`)
+  gained a `role` field — a breaking constructor change with **5 call sites**
+  found and fixed (`JwtService`, `DemoDataSeeder`, `WorkoutControllerTest`,
+  `WorkoutPlanServiceTest`, `TrainerPhilosophyControllerTest`). A Plan-agent
+  validation pass caught this enumeration before implementation — easy to
+  miss one and get a confusing compile error instead of a clean list.
+- **Backward compatibility**: tokens minted before this deploy have no `role`
+  claim. `JwtService.parse()` defaults a missing claim to `Role.USER` — every
+  pre-deploy account genuinely was `USER` (TRAINER didn't exist), so this
+  exactly reproduces old behavior. Verified via a unit test that hand-builds
+  a raw JWT omitting the claim (`JwtServiceTest.tokenMintedBeforeRoleClaimExisted_defaultsToUser`),
+  not just asserted in code.
+- **Frontend bug caught by the validation pass before it shipped**:
+  `app/login/page.tsx` called `api.getActivePlan()` unconditionally after
+  login to restore the plan cookie — for a TRAINER account (which never has a
+  `FitnessProfile`) this would 404 and silently misroute them through
+  `/plan-selection`. Fixed by branching on `res.user.role === "TRAINER"`
+  *before* that call.
+- `session.ts` gained a parallel `fc_role` cookie (same graceful "missing →
+  USER" default as the JWT) so `middleware.ts` can route trainer accounts
+  correctly in Phase B without another round-trip to the backend.
+- Verified live against local Docker Postgres: fresh USER registration,
+  fresh TRAINER registration (`isTrainer:true`), role persists across
+  login and `/api/auth/me`, and the pre-existing demo user (created before
+  this feature existed) still logs in correctly as `USER`. 82/82 backend
+  tests + 11/11 frontend tests pass.
+
+**Next**: Phase B — the `roster` package (invite codes, trainer↔client
+links, dashboard, plan assignment). Deliberately not `com.fitcoach.trainer`
+(already means *TrainerPhilosophy*, workout methodology templates) or
+`com.fitcoach.coach` (already means the AI chat feature) — both would be a
+real naming collision, not just a style nitpick.

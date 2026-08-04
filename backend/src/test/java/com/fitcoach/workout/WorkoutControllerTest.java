@@ -1,6 +1,7 @@
 package com.fitcoach.workout;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fitcoach.auth.Role;
 import com.fitcoach.auth.jwt.CurrentUser;
 import com.fitcoach.auth.jwt.JwtService;
 import com.fitcoach.common.NotFoundException;
@@ -44,7 +45,7 @@ class WorkoutControllerTest {
     @MockBean JwtService jwtService;
 
     private static final UUID USER_ID = UUID.randomUUID();
-    private static final CurrentUser CURRENT_USER = new CurrentUser(USER_ID, "test@example.com");
+    private static final CurrentUser CURRENT_USER = new CurrentUser(USER_ID, "test@example.com", Role.USER);
 
     @BeforeEach
     void setUpSecurityContext() {

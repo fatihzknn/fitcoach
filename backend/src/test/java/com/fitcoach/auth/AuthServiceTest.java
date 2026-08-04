@@ -39,11 +39,12 @@ class AuthServiceTest {
         when(jwtService.generateToken(any(User.class))).thenReturn("jwt-token");
 
         AuthResponse response = authService.register(
-                new RegisterRequest("Rider@Example.com ", "password123", "Rider"));
+                new RegisterRequest("Rider@Example.com ", "password123", "Rider", false));
 
         assertThat(response.token()).isEqualTo("jwt-token");
         assertThat(response.onboardingCompleted()).isFalse();
         assertThat(response.user().email()).isEqualTo("rider@example.com");
+        assertThat(response.user().role()).isEqualTo(Role.USER);
         verify(userRepository).save(any(User.class));
     }
 
@@ -52,10 +53,22 @@ class AuthServiceTest {
         when(userRepository.existsByEmailIgnoreCase("taken@example.com")).thenReturn(true);
 
         assertThatThrownBy(() -> authService.register(
-                new RegisterRequest("taken@example.com", "password123", "Taken")))
+                new RegisterRequest("taken@example.com", "password123", "Taken", false)))
                 .isInstanceOf(ConflictException.class);
 
         verify(userRepository, never()).save(any());
         verify(passwordEncoder, never()).encode(anyString());
+    }
+
+    @Test
+    void registerAsTrainerCreatesTrainerRole() {
+        when(userRepository.existsByEmailIgnoreCase("coach@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("password123")).thenReturn("hashed");
+        when(jwtService.generateToken(any(User.class))).thenReturn("jwt-token");
+
+        AuthResponse response = authService.register(
+                new RegisterRequest("coach@example.com", "password123", "Coach", true));
+
+        assertThat(response.user().role()).isEqualTo(Role.TRAINER);
     }
 }

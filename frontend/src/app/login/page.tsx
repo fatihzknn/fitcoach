@@ -32,7 +32,14 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await api.login({ email: email.trim(), password });
-      session.start(res.token, res.onboardingCompleted);
+      session.start(res.token, res.onboardingCompleted, res.user.role);
+
+      // Trainer accounts are panel-only — they never have a FitnessProfile,
+      // so onboarding/plan checks below don't apply to them at all.
+      if (res.user.role === "TRAINER") {
+        router.replace("/trainer");
+        return;
+      }
 
       if (!res.onboardingCompleted) {
         router.replace("/onboarding");

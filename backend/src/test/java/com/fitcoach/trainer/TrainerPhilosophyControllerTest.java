@@ -1,5 +1,6 @@
 package com.fitcoach.trainer;
 
+import com.fitcoach.auth.Role;
 import com.fitcoach.auth.jwt.CurrentUser;
 import com.fitcoach.auth.jwt.JwtService;
 import com.fitcoach.profile.FitnessProfile;
@@ -39,7 +40,7 @@ class TrainerPhilosophyControllerTest {
     @MockBean JwtService jwtService;
 
     private static final UUID USER_ID = UUID.randomUUID();
-    private static final CurrentUser CURRENT_USER = new CurrentUser(USER_ID, "test@example.com");
+    private static final CurrentUser CURRENT_USER = new CurrentUser(USER_ID, "test@example.com", Role.USER);
 
     @BeforeEach
     void setUpSecurityContext() {
