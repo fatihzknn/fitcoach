@@ -553,3 +553,55 @@ package (see naming-collision note above).
 Both phases of the trainer/coach portal are now complete — the second of the
 two personalization directions from the `product_roadmap` memory (the first
 being the living-plan work above).
+
+## Test coverage expansion — three zero-coverage services + a real bug found
+
+User asked to expand automated test coverage rather than write a manual test
+guide. Surveyed every `*Service.java`/`*Controller.java` against
+`src/test/java` and found three services with **zero dedicated unit tests**,
+despite being core, user-facing logic: `WorkoutSessionService` (start/log/
+complete a workout, previous-set prefill, exercise history — only exercised
+indirectly through `WorkoutControllerTest`'s full mock), `CoachService`
+(conversation persistence + AI context building — safety-critical since it
+feeds the AI coach, though the pain-response guardrail itself was already
+covered by `MockCoachAiProviderTest`), and `ProfileService` (onboarding
+persistence, pain-area normalization).
+
+- **Real bug found and fixed while reading `WorkoutSessionService
+  .getPreviousSets()`**: it grouped set logs by session with a plain
+  `Collectors.groupingBy(classifier)`, which defaults to a `HashMap` — not
+  insertion-ordered. The repository query already returns rows sorted DESC
+  by session date, and `.findFirst()` on `.values()` assumed that order
+  survived the grouping step, but `HashMap` iteration order isn't guaranteed
+  to match insertion order. For a user who's logged the same exercise across
+  2+ completed sessions, "previous sets" (used to prefill today's weight/reps
+  in the workout UI) could silently return an **older session's numbers
+  instead of the most recent one, non-deterministically** — a correctness
+  bug a normal test run wouldn't reliably catch since `HashMap` order depends
+  on `UUID.hashCode()`, not code path. `getExerciseHistory()` right below it
+  in the same file already guarded against exactly this with an explicit
+  `LinkedHashMap::new` supplier; `getPreviousSets()` was missing that same
+  guard. Fixed to match, with a regression test
+  (`getPreviousSets_returnsOnlyTheMostRecentSessionsSets`) that constructs
+  two sessions' worth of set logs and asserts only the more recent session's
+  sets come back.
+- New test files: `WorkoutSessionServiceTest` (18 tests — session lifecycle
+  state validation, upsert-on-same-set-number, ownership checks via
+  `requireOwnedSession`, the previous-sets regression, exercise-history
+  aggregation including a null-weight/bodyweight-exercise case),
+  `CoachServiceTest` (10 tests — conversation create-vs-reuse, AI context
+  building with/without a profile, active-plan-name inclusion,
+  recent-sessions capped at 5, and the "exclude the just-added pair, cap at
+  `MAX_HISTORY_FOR_AI`" history-slicing math), `ProfileServiceTest` (7 tests
+  — create-vs-update-in-place, and all four branches of the `NONE`-exclusive
+  pain-area normalization: empty→NONE, NONE+specific→specific-only, multiple
+  specifics kept together, not-found on `getProfile`).
+- 109 → **144 backend tests**, all passing (`mvn test`). Controller-slice
+  coverage for the remaining untested controllers (`ProfileController`,
+  `WorkoutSessionController`, `BodyMeasurementController`,
+  `WeeklyCheckInController`, `TrainerConnectionController`, `AuthController`)
+  is deliberately left as known remaining debt — the service-layer gaps were
+  the higher-value target since that's where the actual business logic (and
+  the bug above) lives; the controllers are thin `@RestController` wrappers
+  already exercised end-to-end by the Docker verification passes throughout
+  this project's history.

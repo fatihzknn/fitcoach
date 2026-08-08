@@ -117,19 +117,23 @@ public class WorkoutSessionService {
 
     @Transactional(readOnly = true)
     public List<PreviousSetDto> getPreviousSets(CurrentUser currentUser, UUID exerciseId) {
+        // Only take the most recent completed session's sets (the query returns DESC by
+        // session date). Grouping must preserve that order — a plain HashMap doesn't, so
+        // .findFirst() on its values() could non-deterministically return an older
+        // session's sets instead. LinkedHashMap keeps the first-seen (most recent) group first.
         return setLogRepository.findRecentByUserAndExercise(currentUser.id(), exerciseId)
                 .stream()
-                // Only take the most recent completed session's sets (the query returns DESC by session date)
-                .takeWhile(s -> true)
-                .collect(java.util.stream.Collectors.groupingBy(
-                        s -> s.getWorkoutSession().getId()))
+                .collect(Collectors.groupingBy(
+                        s -> s.getWorkoutSession().getId(),
+                        LinkedHashMap::new,
+                        Collectors.toList()))
                 .values()
                 .stream()
                 .findFirst()
                 .map(sets -> sets.stream()
                         .map(s -> new PreviousSetDto(s.getSetNumber(), s.getWeightKg(),
                                 s.getRepsCompleted(), s.getRirActual()))
-                        .sorted(java.util.Comparator.comparingInt(PreviousSetDto::setNumber))
+                        .sorted(Comparator.comparingInt(PreviousSetDto::setNumber))
                         .toList())
                 .orElse(List.of());
     }
