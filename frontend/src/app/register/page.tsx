@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { api, ApiError } from "@/lib/api";
 import { session } from "@/lib/session";
 import { useI18n, LangToggle } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -18,6 +19,7 @@ export default function RegisterPage() {
   const [displayName, setDisplayName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [isTrainer, setIsTrainer] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
 
@@ -35,9 +37,10 @@ export default function RegisterPage() {
         email: email.trim(),
         password,
         displayName: displayName.trim(),
+        isTrainer,
       });
       session.start(res.token, res.onboardingCompleted, res.user.role);
-      router.replace("/onboarding");
+      router.replace(res.user.role === "TRAINER" ? "/trainer" : "/onboarding");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("Something went wrong. Try again."));
       setLoading(false);
@@ -58,7 +61,36 @@ export default function RegisterPage() {
           {t("Two minutes of setup, then a plan that knows what you’re doing today.")}
         </p>
 
-        <div className="mt-8 space-y-4">
+        <div className="mt-8 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setIsTrainer(false)}
+            aria-pressed={!isTrainer}
+            className={cn(
+              "h-12 rounded-md border text-sm font-medium transition-colors",
+              !isTrainer
+                ? "border-primary bg-primary/10 text-foreground"
+                : "border-border bg-card text-muted-foreground hover:bg-elevated",
+            )}
+          >
+            {t("Train myself")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsTrainer(true)}
+            aria-pressed={isTrainer}
+            className={cn(
+              "h-12 rounded-md border text-sm font-medium transition-colors",
+              isTrainer
+                ? "border-primary bg-primary/10 text-foreground"
+                : "border-border bg-card text-muted-foreground hover:bg-elevated",
+            )}
+          >
+            {t("I'm a trainer")}
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">{t("Name")}</Label>
             <Input

@@ -48,7 +48,15 @@ public class WorkoutPlanService {
 
     @Transactional(readOnly = true)
     public PlanOptionsResponse getPlanOptions(CurrentUser currentUser, UUID trainerId) {
-        FitnessProfile profile = requireProfile(currentUser.id());
+        return getPlanOptionsForUser(currentUser.id(), trainerId);
+    }
+
+    /** Same as getPlanOptions, but for an explicit user — used by the trainer
+     *  portal (com.fitcoach.roster) to generate options on a client's behalf,
+     *  after the caller has already verified trainer ownership of that client. */
+    @Transactional(readOnly = true)
+    public PlanOptionsResponse getPlanOptionsForUser(UUID userId, UUID trainerId) {
+        FitnessProfile profile = requireProfile(userId);
         Map<String, Exercise> byName = loadExercisesByName();
         TrainerPhilosophy trainer = resolveTrainer(trainerId, profile);
         return generationService.generateOptions(profile, byName, trainer);
@@ -56,7 +64,14 @@ public class WorkoutPlanService {
 
     @Transactional
     public WorkoutPlanDto selectPlan(CurrentUser currentUser, SelectPlanRequest request) {
-        FitnessProfile profile = requireProfile(currentUser.id());
+        return selectPlanForUser(currentUser.id(), request);
+    }
+
+    /** Same as selectPlan, but for an explicit user — used by the trainer portal
+     *  to assign a plan to a client, after ownership has already been verified. */
+    @Transactional
+    public WorkoutPlanDto selectPlanForUser(UUID userId, SelectPlanRequest request) {
+        FitnessProfile profile = requireProfile(userId);
 
         List<Exercise> allExercises = exerciseRepository.findAll();
         Map<String, Exercise> byName = allExercises.stream()
@@ -71,7 +86,7 @@ public class WorkoutPlanService {
                 : options.alternative();
 
         // Deactivate any existing active plan for this user
-        planRepository.findByUserIdAndIsActiveTrue(currentUser.id())
+        planRepository.findByUserIdAndIsActiveTrue(userId)
                 .ifPresent(existing -> {
                     existing.deactivate();
                     planRepository.save(existing);
@@ -79,7 +94,7 @@ public class WorkoutPlanService {
 
         // Build and persist the selected plan
         WorkoutPlan plan = new WorkoutPlan(
-                currentUser.id(),
+                userId,
                 chosenDto.name(),
                 chosenDto.goal(),
                 chosenDto.trainingDaysPerWeek()
@@ -115,6 +130,19 @@ public class WorkoutPlanService {
         WorkoutPlan plan = planRepository.findByUserIdAndIsActiveTrue(currentUser.id())
                 .orElseThrow(() -> new NotFoundException("No active workout plan. Select a plan first."));
         return WorkoutPlanDto.from(plan, isDeloadRecommended(plan));
+    }
+
+    /** Same as getActivePlan, but for an explicit user and nullable rather than
+     *  throwing — used by the trainer portal to show a client's active plan
+     *  after ownership has been verified. A trainer viewing a client who hasn't
+     *  picked a plan yet is a normal state there, not an error (unlike the
+     *  client's own /api/plan/active, which the frontend relies on 404-ing to
+     *  redirect to plan-selection — kept independent so that contract doesn't change). */
+    @Transactional(readOnly = true)
+    public WorkoutPlanDto getActivePlanForUser(UUID userId) {
+        return planRepository.findByUserIdAndIsActiveTrue(userId)
+                .map(plan -> WorkoutPlanDto.from(plan, isDeloadRecommended(plan)))
+                .orElse(null);
     }
 
     /**

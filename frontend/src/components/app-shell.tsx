@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarDays, LineChart, MessageSquareText, LogOut } from "lucide-react";
+import { CalendarDays, LineChart, MessageSquareText, LogOut, Link2 } from "lucide-react";
 import { Wordmark } from "@/components/wordmark";
 import { session } from "@/lib/session";
 import { useI18n, LangToggle } from "@/lib/i18n";
@@ -38,6 +38,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Wordmark />
         <div className="flex items-center gap-2">
         <LangToggle />
+        <Link
+          href="/link-trainer"
+          className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
+          aria-label={t("Link a trainer")}
+        >
+          <Link2 className="h-5 w-5" />
+        </Link>
         <button
           onClick={handleSignOut}
           className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"

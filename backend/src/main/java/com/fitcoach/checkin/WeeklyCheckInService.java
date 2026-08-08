@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -64,8 +65,16 @@ public class WeeklyCheckInService {
 
     @Transactional(readOnly = true)
     public ProgressStatsDto getStats(CurrentUser currentUser) {
+        return getStatsForUser(currentUser.id());
+    }
+
+    /** Same as getStats, but for an explicit user — used by the trainer portal
+     *  dashboard to summarize a client's adherence/streak, after ownership has
+     *  already been verified. */
+    @Transactional(readOnly = true)
+    public ProgressStatsDto getStatsForUser(UUID userId) {
         List<WorkoutSession> allSessions = sessionRepository
-                .findAllByUserIdAndStatusOrderByStartedAtDesc(currentUser.id(), SessionStatus.COMPLETED);
+                .findAllByUserIdAndStatusOrderByStartedAtDesc(userId, SessionStatus.COMPLETED);
 
         int totalAllTime = allSessions.size();
 
@@ -75,10 +84,10 @@ public class WeeklyCheckInService {
                 .count();
 
         int streak = computeStreak(allSessions);
-        int adherence = computeAdherence4Weeks(currentUser, allSessions);
+        int adherence = computeAdherence4Weeks(userId, allSessions);
 
         List<WeeklyCheckInDto> history = checkInRepository
-                .findAllByUserIdOrderByWeekStartDesc(currentUser.id())
+                .findAllByUserIdOrderByWeekStartDesc(userId)
                 .stream()
                 .map(WeeklyCheckInDto::from)
                 .toList();
@@ -117,8 +126,8 @@ public class WeeklyCheckInService {
         return streak;
     }
 
-    private int computeAdherence4Weeks(CurrentUser currentUser, List<WorkoutSession> sessions) {
-        int plannedPerWeek = planRepository.findByUserIdAndIsActiveTrue(currentUser.id())
+    private int computeAdherence4Weeks(UUID userId, List<WorkoutSession> sessions) {
+        int plannedPerWeek = planRepository.findByUserIdAndIsActiveTrue(userId)
                 .map(p -> p.getTrainingDaysPerWeek())
                 .orElse(0);
         if (plannedPerWeek == 0) return 0;

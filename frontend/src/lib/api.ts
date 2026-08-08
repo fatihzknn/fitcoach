@@ -310,11 +310,34 @@ export interface ChatMessageDto {
   createdAt: string;
 }
 
+// ─── Trainer roster types ──────────────────────────────────────────────────────
+
+export interface TrainerInviteDto {
+  code: string;
+  expiresAt: string;
+}
+
+export interface ClientSummaryDto {
+  clientId: string;
+  displayName: string;
+  email: string;
+  linkedAt: string;
+  activePlanName: string | null;
+  adherenceRate4Weeks: number;
+  currentStreakWeeks: number;
+}
+
+export interface ClientDetailDto {
+  summary: ClientSummaryDto;
+  stats: ProgressStatsDto;
+  activePlan: WorkoutPlanDto | null;
+}
+
 export const api = {
   baseUrl: API_BASE_URL,
   health: () => request<HealthResponse>("/api/health"),
 
-  register: (input: { email: string; password: string; displayName: string }) =>
+  register: (input: { email: string; password: string; displayName: string; isTrainer?: boolean }) =>
     request<AuthResponse>("/api/auth/register", {
       method: "POST",
       body: JSON.stringify(input),
@@ -434,4 +457,43 @@ export const api = {
       `/api/sessions/exercise-history?exerciseId=${exerciseId}`,
       { auth: true },
     ),
+
+  // ─── Trainer roster (trainer-facing) ──────────────────────────────────────
+
+  getInviteCode: () =>
+    request<TrainerInviteDto>("/api/trainer/invite-code", { auth: true }),
+
+  regenerateInviteCode: () =>
+    request<TrainerInviteDto>("/api/trainer/invite-code/regenerate", {
+      method: "POST",
+      auth: true,
+    }),
+
+  getTrainerClients: () =>
+    request<ClientSummaryDto[]>("/api/trainer/clients", { auth: true }),
+
+  getTrainerClientDetail: (clientId: string) =>
+    request<ClientDetailDto>(`/api/trainer/clients/${clientId}`, { auth: true }),
+
+  getClientPlanOptions: (clientId: string, trainerId?: string) =>
+    request<PlanOptionsResponse>(
+      `/api/trainer/clients/${clientId}/plan-options${trainerId ? `?trainerId=${trainerId}` : ""}`,
+      { auth: true },
+    ),
+
+  assignClientPlan: (clientId: string, input: { option: PlanOption; trainerId?: string }) =>
+    request<WorkoutPlanDto>(`/api/trainer/clients/${clientId}/plan`, {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    }),
+
+  // ─── Trainer connections (client-facing) ──────────────────────────────────
+
+  redeemInviteCode: (code: string) =>
+    request<void>("/api/trainer-connections/redeem", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify({ code }),
+    }),
 };

@@ -14,6 +14,8 @@ export const tr: Record<string, string> = {
   "New here?": "Yeni misin?",
   "Create an account": "Hesap oluştur",
   "Start training smarter": "Daha akıllı antrenmana başla",
+  "Train myself": "Kendim antrenman yapacağım",
+  "I'm a trainer": "Ben bir antrenörüm",
   "Two minutes of setup, then a plan that knows what you’re doing today.":
     "İki dakikalık kurulum, sonra bugün ne yapacağını bilen bir plan.",
   "Name": "İsim",
@@ -335,4 +337,38 @@ export const tr: Record<string, string> = {
   "FitCoach AI cannot diagnose injuries or provide medical advice. If you are in pain, consult a healthcare professional.":
     "FitCoach yapay zekâsı sakatlık teşhisi koyamaz ve tıbbi tavsiye veremez. Ağrın varsa bir sağlık uzmanına başvur.",
   "Couldn't send. Try again.": "Gönderilemedi. Tekrar dene.",
+
+  // ─── Trainer portal ────────────────────────────────────────────────────────
+  "Your invite code": "Davet kodun",
+  "Could not load invite code.": "Davet kodu yüklenemedi.",
+  "Copy code": "Kodu kopyala",
+  "Share this code with your clients. They enter it once to link their account to your panel.":
+    "Bu kodu danışanlarınla paylaş. Hesaplarını panelinle bağlamak için bir kez girmeleri yeterli.",
+  "Regenerating…": "Yenileniyor…",
+  "Regenerate code": "Kodu yenile",
+  "Could not regenerate code.": "Kod yenilenemedi.",
+  "Clients": "Danışanlar",
+  "Could not load your clients.": "Danışanların yüklenemedi.",
+  "No clients yet": "Henüz danışan yok",
+  "Share your invite code above. Once a client enters it, they’ll show up here.":
+    "Yukarıdaki davet kodunu paylaş. Bir danışan girdiğinde burada görünecek.",
+  "No active plan": "Aktif plan yok",
+  "Could not load this client.": "Bu danışan yüklenemedi.",
+  "Active plan": "Aktif plan",
+  "Change plan": "Planı değiştir",
+  "Assign a plan": "Plan ata",
+  "Plan assigned.": "Plan atandı.",
+  "Cancel": "Vazgeç",
+  "Could not assign plan. Please try again.": "Plan atanamadı. Tekrar dene.",
+  "Enter your trainer’s invite code.": "Antrenörünün davet kodunu gir.",
+  "Back": "Geri",
+  "You’re linked": "Bağlandın",
+  "Your trainer can now see your progress and assign you plans.":
+    "Antrenörün artık ilerlemeni görebilir ve sana plan atayabilir.",
+  "Link your trainer": "Antrenörünü bağla",
+  "Enter the invite code your trainer shared with you.": "Antrenörünün seninle paylaştığı davet kodunu gir.",
+  "Invite code": "Davet kodu",
+  "Linking…": "Bağlanıyor…",
+  "Link trainer": "Antrenörü bağla",
+  "Link a trainer": "Bir antrenör bağla",
 };

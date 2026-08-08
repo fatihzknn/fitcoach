@@ -474,3 +474,82 @@ links, dashboard, plan assignment). Deliberately not `com.fitcoach.trainer`
 (already means *TrainerPhilosophy*, workout methodology templates) or
 `com.fitcoach.coach` (already means the AI chat feature) — both would be a
 real naming collision, not just a style nitpick.
+
+## Phase — Trainer portal, Phase B: roster domain + trainer frontend
+
+Built on top of Phase A once it was verified stable. New `com.fitcoach.roster`
+package (see naming-collision note above).
+
+- **Invite codes, not email.** The project has zero email infrastructure;
+  adding one was explicitly declined for this pass. One standing 8-char code
+  per trainer (`trainer_invites`, `UNIQUE(trainer_id)`) from an unambiguous
+  alphabet (`ABCDEFGHJKMNPQRSTUVWXYZ23456789` — no `0/O`, `1/I/L`), generated
+  via `SecureRandom` with retry-on-collision. 30-day expiry; fetching a code
+  past expiry silently regenerates it (a trainer should never be shown a dead
+  code); a separate explicit "regenerate" action covers "this leaked."
+- **Idempotent redemption, multi-trainer clients allowed.** Redeeming an
+  already-redeemed code returns the existing link instead of erroring — a
+  double-tap shouldn't scare anyone. No uniqueness constraint on `client_id`
+  alone in `trainer_clients`, so a client can link to multiple trainers; if
+  two trainers both assign plans, last assignment wins (same behavior a
+  client already gets from re-selecting their own plan) — not worth a guard
+  with no product ask behind it.
+- **Two-tier authorization: 403 vs. 404.** A role mismatch (a `USER` hitting
+  a trainer-only endpoint, or a `TRAINER` trying to redeem a code — "panel
+  only" per the product decision) → new `ForbiddenException` → 403; the
+  endpoint's existence isn't sensitive. An ownership mismatch (trainer A
+  requesting trainer B's client by guessed UUID) → existing
+  `NotFoundException` → 404, matching `WorkoutSessionService
+  .requireOwnedSession`'s established precedent exactly rather than
+  introducing an inconsistent new pattern.
+- **Reused, not duplicated, plan-generation logic.** `WorkoutPlanService` and
+  `WeeklyCheckInService` already resolved everything off a plain `UUID`
+  internally; extracted `getPlanOptionsForUser`/`selectPlanForUser`/
+  `getActivePlanForUser`/`getStatsForUser` (`UUID`-based) alongside the
+  original `CurrentUser`-based methods, which now delegate to them. The
+  trainer portal calls the `UUID` variants after its own ownership check.
+  Sex-based trainer visibility (`TrainerVisibility.isVisible`) is inherited
+  for free since it's keyed off the *client's* profile.
+- **Near-miss bug caught before shipping**: an early draft of
+  `getActivePlanForUser(UUID)` had `getActivePlan(CurrentUser)` delegate to
+  it and return `null` instead of throwing. That would have silently changed
+  `/api/plan/active`'s contract from a 404 (which `login.tsx`'s `try/catch`
+  depends on to redirect to `/plan-selection`) to a 200-with-null-body. Fixed
+  by keeping the two methods fully independent instead of one delegating to
+  the other.
+- **`WeeklyCheckInService` had zero test coverage before this phase** —
+  added a baseline `WeeklyCheckInServiceTest` (stats/streak/adherence)
+  alongside the extraction, since nothing else would have caught a mistake
+  in logic the trainer dashboard now also depends on.
+- **Frontend account-type toggle at registration** (`/register`): "Train
+  myself" vs. "I'm a trainer" (`isTrainer` on the register request). A
+  TRAINER account is **panel-only** — it never sees onboarding, plan
+  selection, or workout logging; `middleware.ts` redirects any client route
+  to `/trainer` for a TRAINER session and redirects `/trainer/**` back to
+  the right home for a client session (`fc_role` cookie, same graceful
+  "missing → USER" default as the JWT).
+- **`components/plan-picker.tsx`** extracted the "pick a philosophy, see
+  recommended vs. alternative plan" UI (`TrainerCard`, `DayRow`, `PlanCard`,
+  `PersonalizingOverlay`) out of `plan-selection/page.tsx` into shared,
+  prop-driven components, so the trainer's client-detail page
+  (`/trainer/clients/[clientId]`) reuses the exact same picker when
+  assigning a plan instead of rebuilding it. `plan-selection/page.tsx`'s own
+  behavior is unchanged (import-only edit, verified via `tsc`).
+- **`/link-trainer`** is the client-side redemption entry point, reachable
+  from a small icon in `AppShell`'s header next to sign-out; guarded by
+  auth-only (independent of onboarding/plan progress, since a client could
+  reasonably want to link a trainer before finishing their own setup).
+- Verified end-to-end against local Docker Postgres: registered a trainer
+  and a separate client, fetched the trainer's invite code, redeemed it
+  (`204`, confirmed idempotent on a second redemption), confirmed the client
+  appeared in `GET /api/trainer/clients`, fetched plan options and assigned
+  the recommended plan from the trainer side, confirmed it became the
+  client's own active plan via `GET /api/plan/active`, confirmed a client
+  gets `403` on `/api/trainer/**`, a trainer gets `404` on a guessed/unowned
+  client UUID, a `TRAINER` gets `403` redeeming a code, and that
+  regenerating an invite code issues a new one. 109/109 backend tests,
+  11/11 frontend tests, `tsc`/`next lint` clean.
+
+Both phases of the trainer/coach portal are now complete — the second of the
+two personalization directions from the `product_roadmap` memory (the first
+being the living-plan work above).
