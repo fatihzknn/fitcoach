@@ -31,11 +31,15 @@ export default function PlanSelectionPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
 
-  // Load trainers on mount, then load plan options for the first trainer
+  // Load trainers on mount, then load plan options for the first trainer. The
+  // "personalizing" overlay belongs here — before the picker is shown — not on
+  // the final select step, so it reads as "building your plans" rather than a
+  // redundant confirmation delay after the user has already chosen one.
   React.useEffect(() => {
     let active = true;
     setLoading(true);
-    api.getTrainers()
+    const minDelay = new Promise((resolve) => setTimeout(resolve, 2400));
+    const load = api.getTrainers()
       .then((data) => {
         if (!active) return;
         setTrainers(data);
@@ -51,8 +55,8 @@ export default function PlanSelectionPage() {
       .catch((err: unknown) => {
         if (!active) return;
         setError(err instanceof ApiError ? err.message : t("Could not load plans. Please try again."));
-      })
-      .finally(() => { if (active) setLoading(false); });
+      });
+    Promise.all([load, minDelay]).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [t]);
 
@@ -77,13 +81,7 @@ export default function PlanSelectionPage() {
     setSubmitting(true);
     setError(null);
     try {
-      // Minimum display time so the personalizing overlay reads as real
-      // work happening, even when the API responds instantly.
-      const minDelay = new Promise((resolve) => setTimeout(resolve, 2400));
-      await Promise.all([
-        api.selectPlan({ option, trainerId: selectedTrainerId ?? undefined }),
-        minDelay,
-      ]);
+      await api.selectPlan({ option, trainerId: selectedTrainerId ?? undefined });
       session.setPlanSelected();
       router.replace("/today");
     } catch (err: unknown) {
@@ -195,7 +193,7 @@ export default function PlanSelectionPage() {
         )}
       </div>
 
-      {submitting && <PersonalizingOverlay />}
+      {loading && <PersonalizingOverlay />}
     </main>
   );
 }

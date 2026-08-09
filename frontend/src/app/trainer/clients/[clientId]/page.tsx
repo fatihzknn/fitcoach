@@ -44,6 +44,7 @@ export default function TrainerClientDetailPage() {
   const [error, setError] = React.useState<string | null>(null);
 
   const [assigning, setAssigning] = React.useState(false);
+  const [initializing, setInitializing] = React.useState(false);
   const [trainers, setTrainers] = React.useState<TrainerPhilosophyDto[]>([]);
   const [selectedTrainerId, setSelectedTrainerId] = React.useState<string | null>(null);
   const [recommended, setRecommended] = React.useState<WorkoutPlanDto | null>(null);
@@ -70,7 +71,11 @@ export default function TrainerClientDetailPage() {
     setAssignError(null);
     setJustAssigned(false);
     if (trainers.length === 0) {
-      api.getTrainers()
+      // "Personalizing" overlay belongs here — before the picker is shown —
+      // not on the final assign step, same reasoning as plan-selection.
+      setInitializing(true);
+      const minDelay = new Promise((resolve) => setTimeout(resolve, 2400));
+      const load = api.getTrainers()
         .then((data) => {
           setTrainers(data);
           const firstId = data[0]?.id ?? null;
@@ -80,6 +85,7 @@ export default function TrainerClientDetailPage() {
         .catch((err: unknown) => {
           setAssignError(err instanceof ApiError ? err.message : t("Could not load plans. Please try again."));
         });
+      Promise.all([load, minDelay]).finally(() => setInitializing(false));
     }
   }
 
@@ -107,11 +113,7 @@ export default function TrainerClientDetailPage() {
     setSubmitting(true);
     setAssignError(null);
     try {
-      const minDelay = new Promise((resolve) => setTimeout(resolve, 1600));
-      await Promise.all([
-        api.assignClientPlan(clientId, { option, trainerId: selectedTrainerId ?? undefined }),
-        minDelay,
-      ]);
+      await api.assignClientPlan(clientId, { option, trainerId: selectedTrainerId ?? undefined });
       setAssigning(false);
       setJustAssigned(true);
       await loadDetail();
@@ -197,7 +199,7 @@ export default function TrainerClientDetailPage() {
             </CardContent>
           </Card>
 
-          {assigning && (
+          {assigning && !initializing && (
             <div className="space-y-4">
               {assignError && (
                 <p className="rounded-lg bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">{assignError}</p>
@@ -207,21 +209,14 @@ export default function TrainerClientDetailPage() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-0.5">
                   {t("Training philosophy")}
                 </p>
-                {trainers.length === 0 ? (
-                  <div className="space-y-2 animate-pulse">
-                    <div className="h-16 rounded-xl bg-card" />
-                    <div className="h-16 rounded-xl bg-card" />
-                  </div>
-                ) : (
-                  trainers.map((trainer) => (
-                    <TrainerCard
-                      key={trainer.id}
-                      trainer={trainer}
-                      selected={trainer.id === selectedTrainerId}
-                      onSelect={() => handleTrainerSelect(trainer.id)}
-                    />
-                  ))
-                )}
+                {trainers.map((trainer) => (
+                  <TrainerCard
+                    key={trainer.id}
+                    trainer={trainer}
+                    selected={trainer.id === selectedTrainerId}
+                    onSelect={() => handleTrainerSelect(trainer.id)}
+                  />
+                ))}
               </div>
 
               {optionsLoading ? (
@@ -244,7 +239,7 @@ export default function TrainerClientDetailPage() {
         </>
       )}
 
-      {submitting && <PersonalizingOverlay />}
+      {assigning && initializing && <PersonalizingOverlay />}
     </section>
   );
 }
