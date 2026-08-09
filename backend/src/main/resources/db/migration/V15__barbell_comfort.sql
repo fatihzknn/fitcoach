@@ -1,0 +1,2 @@
+ALTER TABLE fitness_profiles
+    ADD COLUMN barbell_comfort VARCHAR(32) NOT NULL DEFAULT 'COMFORTABLE';

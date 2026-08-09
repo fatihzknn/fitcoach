@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { OptionCard } from "@/components/ui/option-card";
 import {
   BACKGROUND_OPTIONS,
+  BARBELL_COMFORT_OPTIONS,
   DAYS_OPTIONS,
   DURATION_OPTIONS,
   GOAL_OPTIONS,
@@ -20,6 +21,7 @@ import {
 import {
   api,
   ApiError,
+  type BarbellComfort,
   type MainGoal,
   type OnboardingRequest,
   type PainArea,
@@ -30,7 +32,7 @@ import { session } from "@/lib/session";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
 
 interface Draft {
   mainGoal?: MainGoal;
@@ -41,6 +43,7 @@ interface Draft {
   heightCm: string;
   weightKg: string;
   sex?: Sex;
+  barbellComfort?: BarbellComfort;
   painAreas: PainArea[];
 }
 
@@ -113,6 +116,7 @@ export default function OnboardingPage() {
       weightKg: Number(draft.weightKg),
       sex: draft.sex!,
       painAreas,
+      barbellComfort: draft.barbellComfort!,
     };
 
     setSubmitting(true);
@@ -272,6 +276,20 @@ export default function OnboardingPage() {
 
         {step === 5 && (
           <div className="space-y-3">
+            {BARBELL_COMFORT_OPTIONS.map((o) => (
+              <OptionCard
+                key={o.value}
+                label={t(o.label)}
+                hint={t(o.hint)}
+                selected={draft.barbellComfort === o.value}
+                onSelect={() => choose("barbellComfort", o.value)}
+              />
+            ))}
+          </div>
+        )}
+
+        {step === 6 && (
+          <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
               {t("Select all that apply. This keeps risky movements out of your plan.")}
             </p>
@@ -307,7 +325,7 @@ export default function OnboardingPage() {
         </Button>
       )}
 
-      {step === 5 && (
+      {step === 6 && (
         <Button className="mt-6 w-full" size="lg" onClick={submit} disabled={submitting}>
           {submitting ? t("Building your plan...") : t("Finish setup")}
         </Button>

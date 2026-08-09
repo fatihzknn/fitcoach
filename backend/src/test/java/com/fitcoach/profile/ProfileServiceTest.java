@@ -3,6 +3,7 @@ package com.fitcoach.profile;
 import com.fitcoach.auth.Role;
 import com.fitcoach.auth.jwt.CurrentUser;
 import com.fitcoach.common.NotFoundException;
+import com.fitcoach.profile.domain.BarbellComfort;
 import com.fitcoach.profile.domain.MainGoal;
 import com.fitcoach.profile.domain.PainArea;
 import com.fitcoach.profile.domain.Sex;
@@ -43,7 +44,7 @@ class ProfileServiceTest {
     private OnboardingRequest request(Set<PainArea> painAreas) {
         return new OnboardingRequest(
                 MainGoal.MUSCLE_GAIN, TrainingBackground.REGULAR, 4, 60,
-                28, 178, 80.0, Sex.MALE, painAreas);
+                28, 178, 80.0, Sex.MALE, painAreas, BarbellComfort.COMFORTABLE);
     }
 
     // ─── completeOnboarding ─────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ class ProfileServiceTest {
         FitnessProfileDto result = service.completeOnboarding(CURRENT_USER, request(Set.of(PainArea.NONE)));
 
         assertThat(result.mainGoal()).isEqualTo(MainGoal.MUSCLE_GAIN);
+        assertThat(result.barbellComfort()).isEqualTo(BarbellComfort.COMFORTABLE);
         assertThat(result.onboardingCompleted()).isTrue();
         assertThat(result.onboardingCompletedAt()).isNotNull();
 

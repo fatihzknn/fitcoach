@@ -33,6 +33,7 @@ export type MainGoal = "FAT_LOSS" | "MUSCLE_GAIN" | "STRENGTH" | "GENERAL_FITNES
 export type TrainingBackground = "STARTING" | "RETURNING" | "REGULAR";
 export type Sex = "MALE" | "FEMALE" | "OTHER";
 export type PainArea = "NONE" | "KNEE" | "LOWER_BACK" | "SHOULDER" | "OTHER";
+export type BarbellComfort = "COMFORTABLE" | "PREFER_ALTERNATIVES";
 
 export interface OnboardingRequest {
   mainGoal: MainGoal;
@@ -44,6 +45,7 @@ export interface OnboardingRequest {
   weightKg: number;
   sex: Sex;
   painAreas: PainArea[];
+  barbellComfort: BarbellComfort;
 }
 
 export interface FitnessProfileDto extends OnboardingRequest {

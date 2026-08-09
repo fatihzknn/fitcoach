@@ -5,6 +5,7 @@ import com.fitcoach.exercise.domain.DifficultyLevel;
 import com.fitcoach.exercise.domain.MovementPattern;
 import com.fitcoach.exercise.domain.MuscleGroup;
 import com.fitcoach.profile.FitnessProfile;
+import com.fitcoach.profile.domain.BarbellComfort;
 import com.fitcoach.profile.domain.MainGoal;
 import com.fitcoach.profile.domain.PainArea;
 import com.fitcoach.profile.domain.Sex;
@@ -201,7 +202,44 @@ class WorkoutGenerationServiceTest {
     }
 
     @Test
-    void noDuplicateExerciseWithinAnyDayAcrossAllTrainersTemplatesAndPainAreas() {
+    void substitutionAppliesForBarbellDiscomfort() {
+        FitnessProfile profile = profileWith(TrainingBackground.REGULAR, 3, MainGoal.MUSCLE_GAIN,
+                Set.of(PainArea.NONE), BarbellComfort.PREFER_ALTERNATIVES);
+
+        PlanOptionsResponse result = service.generateOptions(profile, exercises, defaultTrainer);
+
+        // "Full Body A" (day 0) starts with "Barbell Bench Press" in the literal template.
+        var fullBodyA = result.recommended().days().get(0);
+        assertThat(fullBodyA.exercises().get(0).exercise().name()).isEqualTo("Chest Press Machine");
+    }
+
+    @Test
+    void barbellComfortOverridesTrainerIntroducedBarbellLift() {
+        // Regression test for a real bug found during design: a naive 3rd-parallel-.or()
+        // implementation would resolve BarbellComfortPreferences against the template's
+        // *literal* slot name only, and would never catch a substitution that a trainer
+        // preference itself *introduces* — e.g. strength-focused maps the literal slot
+        // "Dumbbell Bench Press" -> "Barbell Bench Press", which a PREFER_ALTERNATIVES
+        // user should never end up with. Fixed by applying comfort as a second-pass
+        // filter over whatever pain/trainer-preference already resolved to.
+        FitnessProfile profile = profileWith(TrainingBackground.REGULAR, 4, MainGoal.MUSCLE_GAIN,
+                Set.of(PainArea.NONE), BarbellComfort.PREFER_ALTERNATIVES);
+        TrainerPhilosophy strengthTrainer = trainerWith(3, 6, 8, 12, 180, 90, 1, 5, 3,
+                "Strength Focused", "strength-focused");
+
+        PlanOptionsResponse result = service.generateOptions(profile, exercises, strengthTrainer);
+
+        // "Upper B" (day index 2) starts with "Dumbbell Bench Press" in the template;
+        // strength-focused prefers "Barbell Bench Press" for that slot — comfort must
+        // override it back to a non-barbell exercise.
+        var upperB = result.recommended().days().get(2);
+        assertThat(upperB.workoutName()).isEqualTo("Upper B");
+        assertThat(upperB.exercises().get(0).exercise().name()).isNotEqualTo("Barbell Bench Press");
+        assertThat(upperB.exercises().get(0).exercise().name()).isEqualTo("Chest Press Machine");
+    }
+
+    @Test
+    void noDuplicateExerciseWithinAnyDayAcrossAllTrainersTemplatesPainAreasAndBarbellComfort() {
         List<TrainerPhilosophy> trainers = List.of(
                 trainerWith(6, 20, 10, 30, 120, 60, 2, 4, 3, "Evidence-Based", "evidence-based"),
                 trainerWith(8, 12, 10, 15, 90, 60, 1, 4, 3, "Classic Bodybuilding", "classic-bodybuilding"),
@@ -219,20 +257,22 @@ class WorkoutGenerationServiceTest {
 
         for (TrainerPhilosophy trainer : trainers) {
             for (Set<PainArea> painAreas : painCombos) {
-                for (TrainingBackground bg : TrainingBackground.values()) {
-                    for (int days = 3; days <= 5; days++) {
-                        FitnessProfile profile = profileWithPain(bg, days, MainGoal.MUSCLE_GAIN, painAreas);
-                        PlanOptionsResponse result = service.generateOptions(profile, exercises, trainer);
+                for (BarbellComfort barbellComfort : BarbellComfort.values()) {
+                    for (TrainingBackground bg : TrainingBackground.values()) {
+                        for (int days = 3; days <= 5; days++) {
+                            FitnessProfile profile = profileWith(bg, days, MainGoal.MUSCLE_GAIN, painAreas, barbellComfort);
+                            PlanOptionsResponse result = service.generateOptions(profile, exercises, trainer);
 
-                        for (WorkoutPlanDto planDto : List.of(result.recommended(), result.alternative())) {
-                            for (var day : planDto.days()) {
-                                List<String> names = day.exercises().stream()
-                                        .map(we -> we.exercise().name())
-                                        .toList();
-                                assertThat(names)
-                                        .as("Trainer %s, pain %s, %s %d-day, day '%s' should have no duplicate exercises",
-                                                trainer.getDisplayName(), painAreas, bg, days, day.workoutName())
-                                        .doesNotHaveDuplicates();
+                            for (WorkoutPlanDto planDto : List.of(result.recommended(), result.alternative())) {
+                                for (var day : planDto.days()) {
+                                    List<String> names = day.exercises().stream()
+                                            .map(we -> we.exercise().name())
+                                            .toList();
+                                    assertThat(names)
+                                            .as("Trainer %s, pain %s, barbell comfort %s, %s %d-day, day '%s' should have no duplicate exercises",
+                                                    trainer.getDisplayName(), painAreas, barbellComfort, bg, days, day.workoutName())
+                                            .doesNotHaveDuplicates();
+                                }
                             }
                         }
                     }
@@ -358,6 +398,13 @@ class WorkoutGenerationServiceTest {
         p.setWeightKg(75.0);
         p.setSessionDurationMinutes(60);
         p.setPainAreas(painAreas);
+        return p;
+    }
+
+    private FitnessProfile profileWith(TrainingBackground background, int days, MainGoal goal,
+                                        Set<PainArea> painAreas, BarbellComfort barbellComfort) {
+        FitnessProfile p = profileWithPain(background, days, goal, painAreas);
+        p.setBarbellComfort(barbellComfort);
         return p;
     }
 

@@ -1,6 +1,7 @@
 package com.fitcoach.profile.dto;
 
 import com.fitcoach.profile.FitnessProfile;
+import com.fitcoach.profile.domain.BarbellComfort;
 import com.fitcoach.profile.domain.MainGoal;
 import com.fitcoach.profile.domain.PainArea;
 import com.fitcoach.profile.domain.Sex;
@@ -22,6 +23,7 @@ public record FitnessProfileDto(
         double weightKg,
         Sex sex,
         Set<PainArea> painAreas,
+        BarbellComfort barbellComfort,
         boolean onboardingCompleted,
         Instant onboardingCompletedAt
 ) {
@@ -37,6 +39,7 @@ public record FitnessProfileDto(
                 p.getWeightKg(),
                 p.getSex(),
                 new TreeSet<>(p.getPainAreas()),
+                p.getBarbellComfort(),
                 p.isOnboardingCompleted(),
                 p.getOnboardingCompletedAt());
     }

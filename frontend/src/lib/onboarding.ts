@@ -1,4 +1,5 @@
 import type {
+  BarbellComfort,
   MainGoal,
   PainArea,
   Sex,
@@ -44,11 +45,17 @@ export const PAIN_OPTIONS: { value: PainArea; label: string }[] = [
   { value: "OTHER", label: "Other" },
 ];
 
+export const BARBELL_COMFORT_OPTIONS: { value: BarbellComfort; label: string; hint: string }[] = [
+  { value: "COMFORTABLE", label: "I’m comfortable with barbell lifts", hint: "Squats, deadlifts, bench press" },
+  { value: "PREFER_ALTERNATIVES", label: "I’d prefer machines/dumbbells to start", hint: "We’ll swap barbell moves for safer equivalents" },
+];
+
 export const STEP_TITLES = [
   "What’s your main goal?",
   "What’s your training background?",
   "How many days can you train?",
   "How long are your sessions?",
   "A few basics",
+  "How do you feel about barbells?",
   "Any pain or injuries?",
 ];

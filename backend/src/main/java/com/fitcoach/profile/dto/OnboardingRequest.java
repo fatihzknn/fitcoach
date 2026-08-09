@@ -1,5 +1,6 @@
 package com.fitcoach.profile.dto;
 
+import com.fitcoach.profile.domain.BarbellComfort;
 import com.fitcoach.profile.domain.MainGoal;
 import com.fitcoach.profile.domain.PainArea;
 import com.fitcoach.profile.domain.Sex;
@@ -51,7 +52,10 @@ public record OnboardingRequest(
         Sex sex,
 
         @NotNull(message = "Select any pain or injury areas (or None).")
-        Set<PainArea> painAreas
+        Set<PainArea> painAreas,
+
+        @NotNull(message = "Choose your comfort with barbell lifts.")
+        BarbellComfort barbellComfort
 ) {
     @AssertTrue(message = "Session length must be 45, 60, or 75 minutes.")
     public boolean isSessionDurationValid() {

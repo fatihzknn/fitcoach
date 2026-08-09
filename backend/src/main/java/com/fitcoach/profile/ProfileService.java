@@ -38,6 +38,7 @@ public class ProfileService {
         profile.setWeightKg(req.weightKg());
         profile.setSex(req.sex());
         profile.setPainAreas(normalizePainAreas(req.painAreas()));
+        profile.setBarbellComfort(req.barbellComfort());
         profile.markOnboardingCompleted();
 
         profileRepository.save(profile);

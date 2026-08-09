@@ -1,6 +1,7 @@
 package com.fitcoach.profile;
 
 import com.fitcoach.common.BaseEntity;
+import com.fitcoach.profile.domain.BarbellComfort;
 import com.fitcoach.profile.domain.MainGoal;
 import com.fitcoach.profile.domain.PainArea;
 import com.fitcoach.profile.domain.Sex;
@@ -70,6 +71,10 @@ public class FitnessProfile extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "pain_area", nullable = false)
     private Set<PainArea> painAreas = new HashSet<>();
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "barbell_comfort", nullable = false)
+    private BarbellComfort barbellComfort = BarbellComfort.COMFORTABLE;
 
     @Column(name = "onboarding_completed_at")
     private Instant onboardingCompletedAt;
@@ -173,5 +178,13 @@ public class FitnessProfile extends BaseEntity {
 
     public Instant getOnboardingCompletedAt() {
         return onboardingCompletedAt;
+    }
+
+    public BarbellComfort getBarbellComfort() {
+        return barbellComfort;
+    }
+
+    public void setBarbellComfort(BarbellComfort barbellComfort) {
+        this.barbellComfort = barbellComfort;
     }
 }

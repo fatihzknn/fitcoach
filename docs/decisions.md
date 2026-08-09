@@ -605,3 +605,59 @@ persistence, pain-area normalization).
   the bug above) lives; the controllers are thin `@RestController` wrappers
   already exercised end-to-end by the Docker verification passes throughout
   this project's history.
+
+## Personalized program, part 1 of 3 — barbell-comfort onboarding question
+
+First of three features requested together ("kişiye özel program yaptırtacaktık"):
+richer onboarding, trainer-built custom plans, and living-plan struggle detection.
+Shipped as three independent increments; this is the smallest, self-contained one.
+A two-pass research effort (an Explore sweep of all three feature areas, then a
+Plan-agent validation pass against the real code) ran before any code was written —
+worth noting because the validation pass caught a real correctness bug the obvious
+design would have shipped (below).
+
+- **New `barbell_comfort` field** (`V15__barbell_comfort.sql`, `NOT NULL DEFAULT
+  'COMFORTABLE'` — keeps every existing row's behavior unchanged and protects any
+  insert path that doesn't set it explicitly). New onboarding step (7th, inserted
+  before pain/injury) asking comfort with barbell compound lifts —
+  `COMFORTABLE`/`PREFER_ALTERNATIVES`. Deliberately not an equipment-availability
+  question (CLAUDE.md's non-negotiable rule) — it's about the user's own comfort,
+  not what the gym has.
+- **New `BarbellComfortPreferences` registry**, same shape as the existing
+  `PainAvoidancePreferences`/`TrainerExercisePreferences` static utilities. Only 3
+  true barbell-implied compounds exist in the 18-exercise seed library: Barbell
+  Bench Press, Romanian Deadlift, Overhead Press.
+- **Real bug caught by the Plan-agent validation pass before implementation**: the
+  obvious design — a 3rd parallel `.or()` alternative in `slot()`'s existing
+  pain-avoidance → trainer-preference → literal chain, resolved against the
+  template's *literal* slot name like the other two — silently fails to catch a
+  trainer preference that *introduces* a barbell lift the template never asked for
+  (`strength-focused` maps `"Dumbbell Bench Press"`/`"Chest Press Machine"` →
+  `"Barbell Bench Press"`; a `PREFER_ALTERNATIVES` user would get the barbell lift
+  anyway, since barbell-comfort's registry has no entry for the *original* literal
+  name). Fixed by applying barbell-comfort as a **second-pass filter over whatever
+  the existing chain already resolved to**, not a third parallel alternative. Safe
+  only because none of `PainAvoidancePreferences`'s 3 outputs is itself a barbell
+  exercise — guarded by a dedicated invariant test
+  (`noBarbellComfortSubstituteCollidesWithAPainAvoidanceKey`) so a future registry
+  edit can't silently let comfort outrank safety.
+- **Scale finding**: `daySlots(...)` has **43 call sites** (not "a few"), every one
+  passing the literal substring `p.getPainAreas()`. Changed its signature to accept
+  the whole `FitnessProfile` instead of `Set<PainArea>` — turned the edit into one
+  safe uniform find-replace instead of 43 hand-edited insertions, and the next
+  profile-derived registry gets the same treatment for free.
+- **Priority order**: pain-avoidance (safety) → barbell-comfort (personal
+  capability) → trainer-preference (style) → literal — a personal constraint
+  outranks a generic stylistic choice, same reasoning as pain, just not above
+  actual safety.
+- Verified end-to-end against local Docker Postgres: onboarded a fresh user with
+  `PREFER_ALTERNATIVES`, confirmed it persists via `GET /api/profile`, then pulled
+  plan options with the `strength-focused` trainer (the exact bug-fix scenario) and
+  confirmed **zero** occurrences of Barbell Bench Press in either the recommended
+  or alternative plan — while Romanian Deadlift/Overhead Press legitimately stayed
+  in some days where the per-day collision guard had already claimed their
+  substitute elsewhere in that same day (correct, pre-existing behavior, not a
+  regression — same pattern already documented for pain-avoidance). 144 → **152
+  backend tests** (+6 new `BarbellComfortPreferencesTest`, +2 new
+  `WorkoutGenerationServiceTest` cases including the bug-fix regression test), all
+  passing, `tsc`/`next lint`/11 frontend tests clean.

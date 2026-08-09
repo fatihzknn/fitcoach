@@ -11,6 +11,7 @@ import com.fitcoach.measurement.BodyMeasurement;
 import com.fitcoach.measurement.BodyMeasurementRepository;
 import com.fitcoach.measurement.BodyMeasurementService;
 import com.fitcoach.profile.ProfileService;
+import com.fitcoach.profile.domain.BarbellComfort;
 import com.fitcoach.profile.domain.MainGoal;
 import com.fitcoach.profile.domain.PainArea;
 import com.fitcoach.profile.domain.Sex;
@@ -115,7 +116,8 @@ public class DemoDataSeeder implements ApplicationRunner {
                 180,        // cm
                 80.0,       // kg
                 Sex.MALE,
-                Set.of(PainArea.NONE)
+                Set.of(PainArea.NONE),
+                BarbellComfort.COMFORTABLE
         );
         profileService.completeOnboarding(cu, onboarding);
 
