@@ -165,12 +165,17 @@ export default function TrainerClientDetailPage() {
 
           <Card>
             <CardContent className="p-5 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <p className="font-semibold">{t("Active plan")}</p>
                 {!assigning && (
-                  <Button size="sm" variant="secondary" onClick={startAssigning}>
-                    {detail.activePlan ? t("Change plan") : t("Assign a plan")}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="secondary" onClick={() => router.push(`/trainer/clients/${clientId}/custom-plan`)}>
+                      {t("Build custom plan")}
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={startAssigning}>
+                      {detail.activePlan ? t("Change plan") : t("Assign a plan")}
+                    </Button>
+                  </div>
                 )}
               </div>
 

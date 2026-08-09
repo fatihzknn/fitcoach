@@ -10,6 +10,9 @@ import com.fitcoach.trainer.TrainerPhilosophy;
 import com.fitcoach.trainer.TrainerPhilosophyRepository;
 import com.fitcoach.trainer.TrainerVisibility;
 import com.fitcoach.workout.domain.PlanOption;
+import com.fitcoach.workout.dto.CreateCustomPlanRequest;
+import com.fitcoach.workout.dto.CustomPlanDayRequest;
+import com.fitcoach.workout.dto.CustomPlanExerciseRequest;
 import com.fitcoach.workout.dto.PlanOptionsResponse;
 import com.fitcoach.workout.dto.SelectPlanRequest;
 import com.fitcoach.workout.dto.WorkoutDayDto;
@@ -85,12 +88,7 @@ public class WorkoutPlanService {
                 ? options.recommended()
                 : options.alternative();
 
-        // Deactivate any existing active plan for this user
-        planRepository.findByUserIdAndIsActiveTrue(userId)
-                .ifPresent(existing -> {
-                    existing.deactivate();
-                    planRepository.save(existing);
-                });
+        deactivateExistingActivePlan(userId);
 
         // Build and persist the selected plan
         WorkoutPlan plan = new WorkoutPlan(
@@ -123,6 +121,59 @@ public class WorkoutPlanService {
 
         WorkoutPlan saved = planRepository.save(plan);
         return WorkoutPlanDto.from(saved, isDeloadRecommended(saved));
+    }
+
+    /**
+     * Builds and activates a fully custom, trainer-authored plan for a client —
+     * bypasses WorkoutGenerationService entirely. No requireProfile() check: nothing
+     * here reads the client's FitnessProfile (goal/days/exercises all come explicitly
+     * from the trainer), and requiring onboarding-completion would block a trainer
+     * from planning for a brand-new client who hasn't finished their own setup yet.
+     * dayNumber/orderIndex are assigned from list position, never trusted from the
+     * request — workout_days/workout_exercises have unique constraints on those, and
+     * GlobalExceptionHandler has no DataIntegrityViolationException handler, so a
+     * client-supplied duplicate would otherwise surface as an opaque 500.
+     */
+    @Transactional
+    public WorkoutPlanDto createCustomPlanForUser(UUID userId, CreateCustomPlanRequest request) {
+        Map<UUID, Exercise> byId = exerciseRepository.findAll().stream()
+                .collect(Collectors.toMap(Exercise::getId, e -> e));
+
+        deactivateExistingActivePlan(userId);
+
+        WorkoutPlan plan = new WorkoutPlan(userId, request.name(), request.goal(), request.days().size());
+        plan.markCustom();
+        plan.activate();
+
+        int dayNumber = 1;
+        for (CustomPlanDayRequest dayReq : request.days()) {
+            WorkoutDay day = new WorkoutDay(plan, dayNumber++, dayReq.workoutName());
+            int order = 1;
+            for (CustomPlanExerciseRequest exReq : dayReq.exercises()) {
+                Exercise exercise = byId.get(exReq.exerciseId());
+                if (exercise == null) {
+                    throw new NotFoundException("Exercise not found: " + exReq.exerciseId());
+                }
+                WorkoutExercise we = new WorkoutExercise(
+                        day, exercise, order++,
+                        exReq.sets(), exReq.repRangeMin(), exReq.repRangeMax(),
+                        exReq.rirGuidance(), exReq.restSeconds()
+                );
+                day.addExercise(we);
+            }
+            plan.addDay(day);
+        }
+
+        WorkoutPlan saved = planRepository.save(plan);
+        return WorkoutPlanDto.from(saved, isDeloadRecommended(saved));
+    }
+
+    private void deactivateExistingActivePlan(UUID userId) {
+        planRepository.findByUserIdAndIsActiveTrue(userId)
+                .ifPresent(existing -> {
+                    existing.deactivate();
+                    planRepository.save(existing);
+                });
     }
 
     @Transactional(readOnly = true)

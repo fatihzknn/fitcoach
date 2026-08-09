@@ -1,0 +1,2 @@
+ALTER TABLE workout_plans
+    ADD COLUMN is_custom BOOLEAN NOT NULL DEFAULT FALSE;

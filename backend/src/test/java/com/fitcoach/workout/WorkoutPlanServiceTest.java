@@ -2,14 +2,23 @@ package com.fitcoach.workout;
 
 import com.fitcoach.auth.Role;
 import com.fitcoach.auth.jwt.CurrentUser;
+import com.fitcoach.common.NotFoundException;
+import com.fitcoach.exercise.Exercise;
 import com.fitcoach.exercise.ExerciseRepository;
+import com.fitcoach.exercise.domain.DifficultyLevel;
+import com.fitcoach.exercise.domain.MovementPattern;
+import com.fitcoach.exercise.domain.MuscleGroup;
 import com.fitcoach.profile.FitnessProfileRepository;
 import com.fitcoach.profile.domain.MainGoal;
 import com.fitcoach.trainer.TrainerPhilosophy;
 import com.fitcoach.trainer.TrainerPhilosophyRepository;
+import com.fitcoach.workout.dto.CreateCustomPlanRequest;
+import com.fitcoach.workout.dto.CustomPlanDayRequest;
+import com.fitcoach.workout.dto.CustomPlanExerciseRequest;
 import com.fitcoach.workout.dto.WorkoutPlanDto;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -21,8 +30,13 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -115,5 +129,78 @@ class WorkoutPlanServiceTest {
         WorkoutPlanDto result = service.getActivePlan(CURRENT_USER);
 
         assertThat(result.deloadRecommended()).isFalse();
+    }
+
+    // ─── createCustomPlanForUser ────────────────────────────────────────────────
+
+    private Exercise exercise(String name) {
+        return new Exercise(name, MuscleGroup.CHEST, MovementPattern.PUSH,
+                DifficultyLevel.BEGINNER, "form cue", "common mistake");
+    }
+
+    private CustomPlanExerciseRequest exerciseRequest(UUID exerciseId) {
+        return new CustomPlanExerciseRequest(exerciseId, 3, 8, 12, "2 RIR", 90);
+    }
+
+    @Test
+    void createCustomPlanForUser_persistsFullGraphWithSequentialDayAndOrderNumbers() {
+        Exercise benchPress = exercise("Barbell Bench Press");
+        Exercise row = exercise("Cable Row");
+        when(exerciseRepository.findAll()).thenReturn(List.of(benchPress, row));
+        when(planRepository.findByUserIdAndIsActiveTrue(USER_ID)).thenReturn(Optional.empty());
+        when(planRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        CreateCustomPlanRequest request = new CreateCustomPlanRequest(
+                "Custom Plan", MainGoal.MUSCLE_GAIN,
+                List.of(
+                        new CustomPlanDayRequest("Day A", List.of(
+                                exerciseRequest(benchPress.getId()), exerciseRequest(row.getId()))),
+                        new CustomPlanDayRequest("Day B", List.of(exerciseRequest(benchPress.getId())))
+                ));
+
+        WorkoutPlanDto result = service.createCustomPlanForUser(USER_ID, request);
+
+        assertThat(result.name()).isEqualTo("Custom Plan");
+        assertThat(result.isCustom()).isTrue();
+        assertThat(result.days()).hasSize(2);
+        assertThat(result.days().get(0).dayNumber()).isEqualTo(1);
+        assertThat(result.days().get(1).dayNumber()).isEqualTo(2);
+        assertThat(result.days().get(0).exercises()).hasSize(2);
+        assertThat(result.days().get(0).exercises().get(0).orderIndex()).isEqualTo(1);
+        assertThat(result.days().get(0).exercises().get(1).orderIndex()).isEqualTo(2);
+    }
+
+    @Test
+    void createCustomPlanForUser_deactivatesExistingActivePlan() {
+        Exercise benchPress = exercise("Barbell Bench Press");
+        when(exerciseRepository.findAll()).thenReturn(List.of(benchPress));
+        WorkoutPlan existing = mock(WorkoutPlan.class);
+        when(planRepository.findByUserIdAndIsActiveTrue(USER_ID)).thenReturn(Optional.of(existing));
+        when(planRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        CreateCustomPlanRequest request = new CreateCustomPlanRequest(
+                "Custom Plan", MainGoal.MUSCLE_GAIN,
+                List.of(new CustomPlanDayRequest("Day A", List.of(exerciseRequest(benchPress.getId())))));
+
+        service.createCustomPlanForUser(USER_ID, request);
+
+        verify(existing).deactivate();
+        ArgumentCaptor<WorkoutPlan> captor = ArgumentCaptor.forClass(WorkoutPlan.class);
+        verify(planRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues().get(0)).isSameAs(existing);
+    }
+
+    @Test
+    void createCustomPlanForUser_unknownExerciseId_throwsNotFound() {
+        when(exerciseRepository.findAll()).thenReturn(List.of());
+        when(planRepository.findByUserIdAndIsActiveTrue(USER_ID)).thenReturn(Optional.empty());
+
+        CreateCustomPlanRequest request = new CreateCustomPlanRequest(
+                "Custom Plan", MainGoal.MUSCLE_GAIN,
+                List.of(new CustomPlanDayRequest("Day A", List.of(exerciseRequest(UUID.randomUUID())))));
+
+        assertThatThrownBy(() -> service.createCustomPlanForUser(USER_ID, request))
+                .isInstanceOf(NotFoundException.class);
+        verify(planRepository, never()).save(any());
     }
 }

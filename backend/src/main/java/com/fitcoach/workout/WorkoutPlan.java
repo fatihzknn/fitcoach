@@ -50,6 +50,9 @@ public class WorkoutPlan extends BaseEntity {
     @Column(name = "trainer_philosophy_name")
     private String trainerPhilosophyName;
 
+    @Column(name = "is_custom", nullable = false)
+    private boolean isCustom = false;
+
     @OneToMany(mappedBy = "workoutPlan", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @OrderBy("dayNumber ASC")
     private List<WorkoutDay> days = new ArrayList<>();
@@ -97,5 +100,11 @@ public class WorkoutPlan extends BaseEntity {
     public void setTrainerPhilosophy(UUID id, String name) {
         this.trainerPhilosophyId = id;
         this.trainerPhilosophyName = name;
+    }
+
+    public boolean isCustom() { return isCustom; }
+
+    public void markCustom() {
+        this.isCustom = true;
     }
 }

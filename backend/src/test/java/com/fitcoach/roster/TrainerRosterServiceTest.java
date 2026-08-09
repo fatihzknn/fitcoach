@@ -13,6 +13,9 @@ import com.fitcoach.roster.dto.TrainerInviteDto;
 import com.fitcoach.workout.WorkoutPlanRepository;
 import com.fitcoach.workout.WorkoutPlanService;
 import com.fitcoach.workout.domain.PlanOption;
+import com.fitcoach.workout.dto.CreateCustomPlanRequest;
+import com.fitcoach.workout.dto.CustomPlanDayRequest;
+import com.fitcoach.workout.dto.CustomPlanExerciseRequest;
 import com.fitcoach.workout.dto.SelectPlanRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -223,6 +226,41 @@ class TrainerRosterServiceTest {
 
         assertThatThrownBy(() -> service.assignPlanToClient(TRAINER, CLIENT_ID, request))
                 .isInstanceOf(NotFoundException.class);
+    }
+
+    // ─── createCustomPlanForClient ──────────────────────────────────────────────
+
+    private CreateCustomPlanRequest customPlanRequest() {
+        return new CreateCustomPlanRequest("Custom Plan", com.fitcoach.profile.domain.MainGoal.MUSCLE_GAIN,
+                List.of(new CustomPlanDayRequest("Day A",
+                        List.of(new CustomPlanExerciseRequest(UUID.randomUUID(), 3, 8, 12, "2 RIR", 90)))));
+    }
+
+    @Test
+    void createCustomPlanForClient_passesClientIdNotTrainerId() {
+        TrainerClient link = new TrainerClient(TRAINER_ID, CLIENT_ID);
+        when(trainerClientRepository.findByTrainerIdAndClientId(TRAINER_ID, CLIENT_ID))
+                .thenReturn(Optional.of(link));
+        CreateCustomPlanRequest request = customPlanRequest();
+
+        service.createCustomPlanForClient(TRAINER, CLIENT_ID, request);
+
+        verify(planService).createCustomPlanForUser(eq(CLIENT_ID), eq(request));
+    }
+
+    @Test
+    void createCustomPlanForClient_unownedClient_throwsNotFound() {
+        when(trainerClientRepository.findByTrainerIdAndClientId(TRAINER_ID, CLIENT_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createCustomPlanForClient(TRAINER, CLIENT_ID, customPlanRequest()))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void createCustomPlanForClient_nonTrainerCaller_throwsForbidden() {
+        assertThatThrownBy(() -> service.createCustomPlanForClient(CLIENT, CLIENT_ID, customPlanRequest()))
+                .isInstanceOf(ForbiddenException.class);
     }
 
     @Test

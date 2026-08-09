@@ -190,11 +190,34 @@ export interface WorkoutPlanDto {
   trainerPhilosophyId: string | null;
   trainerPhilosophyName: string | null;
   deloadRecommended: boolean;
+  isCustom: boolean;
 }
 
 export interface PlanOptionsResponse {
   recommended: WorkoutPlanDto;
   alternative: WorkoutPlanDto;
+}
+
+// ─── Custom plan builder (trainer-facing) ──────────────────────────────────────
+
+export interface CustomPlanExerciseRequest {
+  exerciseId: string;
+  sets: number;
+  repRangeMin: number;
+  repRangeMax: number;
+  rirGuidance: string;
+  restSeconds: number;
+}
+
+export interface CustomPlanDayRequest {
+  workoutName: string;
+  exercises: CustomPlanExerciseRequest[];
+}
+
+export interface CreateCustomPlanRequest {
+  name: string;
+  goal: MainGoal;
+  days: CustomPlanDayRequest[];
 }
 
 // ─── Session types ─────────────────────────────────────────────────────────────
@@ -485,6 +508,16 @@ export const api = {
 
   assignClientPlan: (clientId: string, input: { option: PlanOption; trainerId?: string }) =>
     request<WorkoutPlanDto>(`/api/trainer/clients/${clientId}/plan`, {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    }),
+
+  getExercises: () =>
+    request<ExerciseDto[]>("/api/exercises", { auth: true }),
+
+  createCustomPlan: (clientId: string, input: CreateCustomPlanRequest) =>
+    request<WorkoutPlanDto>(`/api/trainer/clients/${clientId}/custom-plan`, {
       method: "POST",
       auth: true,
       body: JSON.stringify(input),

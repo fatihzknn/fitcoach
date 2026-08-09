@@ -3,10 +3,17 @@ package com.fitcoach.roster;
 import com.fitcoach.auth.Role;
 import com.fitcoach.auth.jwt.CurrentUser;
 import com.fitcoach.auth.jwt.JwtService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fitcoach.common.ForbiddenException;
 import com.fitcoach.common.NotFoundException;
+import com.fitcoach.profile.domain.MainGoal;
 import com.fitcoach.roster.dto.ClientSummaryDto;
 import com.fitcoach.roster.dto.TrainerInviteDto;
+import com.fitcoach.workout.dto.CreateCustomPlanRequest;
+import com.fitcoach.workout.dto.CustomPlanDayRequest;
+import com.fitcoach.workout.dto.CustomPlanExerciseRequest;
+import com.fitcoach.workout.dto.WorkoutDayDto;
+import com.fitcoach.workout.dto.WorkoutPlanDto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +22,7 @@ import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAut
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
@@ -26,6 +34,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -35,6 +44,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class TrainerRosterControllerTest {
 
     @Autowired MockMvc mockMvc;
+    @Autowired ObjectMapper objectMapper;
     @MockBean TrainerRosterService rosterService;
     @MockBean JwtService jwtService;
 
@@ -85,5 +95,44 @@ class TrainerRosterControllerTest {
         mockMvc.perform(get("/api/trainer/invite-code"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("ABCD2345"));
+    }
+
+    @Test
+    void createCustomPlan_returns201() throws Exception {
+        WorkoutPlanDto saved = new WorkoutPlanDto(
+                UUID.randomUUID(), "Custom Plan", MainGoal.MUSCLE_GAIN, 1,
+                true, null,
+                List.of(new WorkoutDayDto(UUID.randomUUID(), 1, "Day A", List.of())),
+                null, null, false, true
+        );
+        when(rosterService.createCustomPlanForClient(any(), any(), any())).thenReturn(saved);
+
+        String body = objectMapper.writeValueAsString(customPlanRequest());
+
+        mockMvc.perform(post("/api/trainer/clients/" + UUID.randomUUID() + "/custom-plan")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("Custom Plan"))
+                .andExpect(jsonPath("$.isCustom").value(true));
+    }
+
+    @Test
+    void createCustomPlan_returns404ForUnownedClient() throws Exception {
+        when(rosterService.createCustomPlanForClient(any(), any(), any()))
+                .thenThrow(new NotFoundException("Client not found."));
+
+        String body = objectMapper.writeValueAsString(customPlanRequest());
+
+        mockMvc.perform(post("/api/trainer/clients/" + UUID.randomUUID() + "/custom-plan")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isNotFound());
+    }
+
+    private CreateCustomPlanRequest customPlanRequest() {
+        return new CreateCustomPlanRequest("Custom Plan", MainGoal.MUSCLE_GAIN,
+                List.of(new CustomPlanDayRequest("Day A",
+                        List.of(new CustomPlanExerciseRequest(UUID.randomUUID(), 3, 8, 12, "2 RIR", 90)))));
     }
 }

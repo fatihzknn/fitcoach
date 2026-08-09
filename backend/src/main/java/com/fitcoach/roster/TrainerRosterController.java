@@ -4,6 +4,7 @@ import com.fitcoach.auth.jwt.CurrentUser;
 import com.fitcoach.roster.dto.ClientDetailDto;
 import com.fitcoach.roster.dto.ClientSummaryDto;
 import com.fitcoach.roster.dto.TrainerInviteDto;
+import com.fitcoach.workout.dto.CreateCustomPlanRequest;
 import com.fitcoach.workout.dto.PlanOptionsResponse;
 import com.fitcoach.workout.dto.SelectPlanRequest;
 import com.fitcoach.workout.dto.WorkoutPlanDto;
@@ -11,6 +12,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -78,5 +81,15 @@ public class TrainerRosterController {
             @PathVariable UUID clientId,
             @Valid @RequestBody SelectPlanRequest request) {
         return rosterService.assignPlanToClient(currentUser, clientId, request);
+    }
+
+    @PostMapping("/clients/{clientId}/custom-plan")
+    @Operation(summary = "Build and assign a fully custom exercise-by-exercise plan for a client")
+    public ResponseEntity<WorkoutPlanDto> createCustomPlan(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable UUID clientId,
+            @Valid @RequestBody CreateCustomPlanRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(rosterService.createCustomPlanForClient(currentUser, clientId, request));
     }
 }

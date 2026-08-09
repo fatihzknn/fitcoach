@@ -357,7 +357,8 @@ public class WorkoutGenerationService {
                 days,
                 trainer.getId(),
                 trainer.getDisplayName(),
-                false // a freshly-generated candidate plan is never deload-due
+                false, // a freshly-generated candidate plan is never deload-due
+                false  // never custom — this is the deterministic-generator path
         );
     }
 

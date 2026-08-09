@@ -14,6 +14,7 @@ import com.fitcoach.roster.dto.RedeemInviteRequest;
 import com.fitcoach.roster.dto.TrainerInviteDto;
 import com.fitcoach.workout.WorkoutPlanRepository;
 import com.fitcoach.workout.WorkoutPlanService;
+import com.fitcoach.workout.dto.CreateCustomPlanRequest;
 import com.fitcoach.workout.dto.PlanOptionsResponse;
 import com.fitcoach.workout.dto.SelectPlanRequest;
 import com.fitcoach.workout.dto.WorkoutPlanDto;
@@ -124,6 +125,14 @@ public class TrainerRosterService {
         requireTrainerRole(trainer);
         requireOwnedClient(trainer.id(), clientId);
         return planService.selectPlanForUser(clientId, request);
+    }
+
+    @Transactional
+    public WorkoutPlanDto createCustomPlanForClient(CurrentUser trainer, UUID clientId,
+                                                      CreateCustomPlanRequest request) {
+        requireTrainerRole(trainer);
+        requireOwnedClient(trainer.id(), clientId);
+        return planService.createCustomPlanForUser(clientId, request);
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

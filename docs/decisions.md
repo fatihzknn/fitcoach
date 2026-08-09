@@ -661,3 +661,72 @@ design would have shipped (below).
   backend tests** (+6 new `BarbellComfortPreferencesTest`, +2 new
   `WorkoutGenerationServiceTest` cases including the bug-fix regression test), all
   passing, `tsc`/`next lint`/11 frontend tests clean.
+
+## Personalized program, part 2 of 3 — trainer-built custom plans
+
+Second of the three "kişiye özel program" features. Lets a trainer hand-build a
+fully custom, exercise-by-exercise plan for a client from their panel — additive
+alongside the existing recommended/alternative picker, not a replacement.
+Trainer-only by design (assigns to a client from the trainer panel); not a client
+self-service feature.
+
+- **New `is_custom` flag** on `workout_plans` (`V16`, `NOT NULL DEFAULT FALSE`) so
+  the frontend can tell a hand-built plan apart from a generated one without
+  inferring it from `trainerPhilosophyId == null` (a fragile implicit signal —
+  also true of any malformed/legacy row). `WorkoutPlanDto.from()`'s 3 call sites
+  (all internal to `WorkoutPlanService`) needed zero changes; only the 2 places
+  that construct the DTO's record positionally directly
+  (`WorkoutGenerationService.plan()`, and `WorkoutControllerTest`'s test helper)
+  needed the new trailing `false`/`false` argument.
+- **`WorkoutPlanService.createCustomPlanForUser`** bypasses
+  `WorkoutGenerationService` entirely — builds the `WorkoutPlan`/`WorkoutDay`/
+  `WorkoutExercise` object graph directly from trainer input, same single
+  cascading `planRepository.save(plan)` pattern the generated path already uses.
+  No `requireProfile()` check: nothing here reads the client's `FitnessProfile`
+  (goal/days/exercises all come explicitly from the trainer), and requiring
+  onboarding-completion would block a trainer from planning for a brand-new
+  client who hasn't finished their own setup yet.
+- **`dayNumber`/`orderIndex` are assigned from list position, never trusted from
+  the request.** `workout_days`/`workout_exercises` have unique constraints on
+  those pairs, and `GlobalExceptionHandler` has no
+  `DataIntegrityViolationException` handler — a client-supplied duplicate would
+  otherwise surface as an opaque 500 instead of a clean validation error.
+- **Extracted `deactivateExistingActivePlan(UUID)`** out of `selectPlanForUser`'s
+  body (previously inline), now shared by both the generated and custom-plan
+  paths — the one small, behavior-preserving touch to existing code in an
+  otherwise purely-additive increment, covered by existing
+  `WorkoutPlanServiceTest` regression coverage.
+- **New `GET /api/exercises`** (`ExerciseController`, first endpoint to ever list
+  the exercise library — previously exercises only ever reached the frontend
+  nested inside a `WorkoutPlanDto`). Top-level, not nested under `/api/trainer`:
+  it's a generic reference resource any authenticated user can reasonably need,
+  not trainer-only. No new service layer, matches `TrainerPhilosophyController`'s
+  precedent of calling its repository directly for a trivial read. 18 exercises
+  total — no pagination, the frontend picker does client-side search/filter over
+  one fetched list.
+- **New `POST /api/trainer/clients/{clientId}/custom-plan`**, sibling to the
+  existing `.../plan` endpoint, same `requireTrainerRole` → `requireOwnedClient`
+  → delegate chain and 403-vs-404 semantics (verified live: a client hitting this
+  endpoint gets 403 from the role check, confirmed with a validation-passing
+  body so Bean Validation's 400 didn't mask it).
+- **Frontend**: new `components/custom-plan-builder.tsx` (`CustomPlanDayEditor` —
+  a real form, not reusable from `DayRow` which is read-only display;
+  `ExercisePickerSheet` — bottom sheet, one `getExercises()` call, client-side
+  search). New route `app/trainer/clients/[clientId]/custom-plan/page.tsx` rather
+  than a modal on the existing client-detail page, given the flow's size
+  (name+goal → per-day exercise picking with editable sets/rep-range/RIR/rest →
+  save). Deliberately did **not** retrofit `plan-picker.tsx`'s `PlanCard` — its
+  `onSelect`/`option: PlanOption` are hard-typed to the 2-member enum the
+  backend's `SelectPlanRequest` also consumes; a custom plan is neither
+  "recommended" nor "alternative," so reusing it would have meant either
+  corrupting that enum's meaning or touching both of `PlanCard`'s existing
+  call sites for a feature meant to be purely additive.
+- Verified end-to-end against local Docker Postgres: trainer built a 2-day custom
+  plan (Barbell Bench Press / Cable Row) for a linked client, got `201` with
+  `isCustom: true` and correct sequential day/order numbers; confirmed it became
+  the client's own active plan via their `GET /api/plan/active`; confirmed
+  `GET /api/exercises` works for a plain client too (not trainer-gated); confirmed
+  a `USER`-role caller gets `403` from the trainer-only endpoint. 161/161 backend
+  tests (152 → 161: +1 `ExerciseControllerTest`, +3 new
+  `WorkoutPlanServiceTest` cases, +3 new `TrainerRosterServiceTest` cases, +2 new
+  `TrainerRosterControllerTest` cases), `tsc`/`next lint`/11 frontend tests clean.
