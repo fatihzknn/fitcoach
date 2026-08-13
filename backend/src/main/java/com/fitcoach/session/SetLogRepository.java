@@ -9,10 +9,14 @@ import java.util.UUID;
 
 public interface SetLogRepository extends JpaRepository<SetLog, UUID> {
 
+    // Matches on the SetLog's own snapshot exercise (whichever was effective —
+    // substituted or original — at the moment it was logged), not
+    // workoutExercise.exercise directly, so a later swap-back doesn't retroactively
+    // change which exercise's history a historical set counts toward.
     @Query("""
         SELECT s FROM SetLog s
         WHERE s.workoutSession.userId = :userId
-          AND s.workoutExercise.exercise.id = :exerciseId
+          AND s.exercise.id = :exerciseId
           AND s.workoutSession.status = 'COMPLETED'
         ORDER BY s.workoutSession.startedAt DESC, s.setNumber ASC
         """)
@@ -22,7 +26,7 @@ public interface SetLogRepository extends JpaRepository<SetLog, UUID> {
     @Query("""
         SELECT s FROM SetLog s
         WHERE s.workoutSession.userId = :userId
-          AND s.workoutExercise.exercise.id = :exerciseId
+          AND s.exercise.id = :exerciseId
           AND s.workoutSession.status = 'COMPLETED'
         ORDER BY s.workoutSession.startedAt ASC, s.setNumber ASC
         """)

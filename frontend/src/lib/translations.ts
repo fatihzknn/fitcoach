@@ -154,6 +154,7 @@ export const tr: Record<string, string> = {
   "swapped": "değiştirildi",
   "Struggling with this? See an alternative": "Bu egzersizde zorlanıyor musun? Alternatife bak",
   "Suggested": "Önerilen",
+  "Could not swap exercise. Please try again.": "Egzersiz değiştirilemedi. Tekrar dene.",
   "Originally:": "Orijinal:",
   "Tip:": "İpucu:",
   "View progression": "Gelişimi gör",

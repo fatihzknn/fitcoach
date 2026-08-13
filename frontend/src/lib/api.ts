@@ -170,6 +170,9 @@ export interface WorkoutExerciseDto {
   rirGuidance: string;
   restSeconds: number;
   exercise: ExerciseDto;
+  /** Non-null when the user has swapped this slot — persisted for the life of the
+   *  plan. `exercise` above always stays the original template pick. */
+  substitutedExercise: ExerciseDto | null;
 }
 
 export interface WorkoutDayDto {
@@ -433,6 +436,15 @@ export const api = {
       method: "POST",
       auth: true,
       body: JSON.stringify({ notes: notes ?? null }),
+    }),
+
+  /** Swaps (or clears, with exerciseId: null) the exercise for one plan slot —
+   *  persists for the life of the plan, not just the current session. */
+  substituteExercise: (workoutExerciseId: string, exerciseId: string | null) =>
+    request<WorkoutExerciseDto>(`/api/sessions/exercises/${workoutExerciseId}/substitute`, {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify({ exerciseId }),
     }),
 
   getPreviousSets: (exerciseId: string) =>

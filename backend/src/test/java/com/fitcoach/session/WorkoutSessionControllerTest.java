@@ -5,11 +5,17 @@ import com.fitcoach.auth.Role;
 import com.fitcoach.auth.jwt.CurrentUser;
 import com.fitcoach.auth.jwt.JwtService;
 import com.fitcoach.common.NotFoundException;
+import com.fitcoach.exercise.domain.DifficultyLevel;
+import com.fitcoach.exercise.domain.MovementPattern;
+import com.fitcoach.exercise.domain.MuscleGroup;
+import com.fitcoach.exercise.dto.ExerciseDto;
 import com.fitcoach.session.domain.SessionStatus;
 import com.fitcoach.session.dto.LogSetRequest;
 import com.fitcoach.session.dto.StartSessionRequest;
+import com.fitcoach.session.dto.SubstituteExerciseRequest;
 import com.fitcoach.session.dto.WorkoutSessionDto;
 import com.fitcoach.workout.dto.WorkoutDayDto;
+import com.fitcoach.workout.dto.WorkoutExerciseDto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -162,5 +168,34 @@ class WorkoutSessionControllerTest {
 
         mockMvc.perform(get("/api/sessions/exercise-history").param("exerciseId", UUID.randomUUID().toString()))
                 .andExpect(status().isOk());
+    }
+
+    private ExerciseDto exerciseDto(String name) {
+        return new ExerciseDto(UUID.randomUUID(), name, MuscleGroup.CHEST, Set.of(), MovementPattern.PUSH,
+                DifficultyLevel.BEGINNER, null, "form cue", "common mistake", List.of());
+    }
+
+    @Test
+    void substituteExercise_returns200WithSubstitution() throws Exception {
+        WorkoutExerciseDto dto = new WorkoutExerciseDto(UUID.randomUUID(), 1, 3, 8, 12, "2 RIR", 90,
+                exerciseDto("Barbell Bench Press"), exerciseDto("Chest Press Machine"));
+        when(sessionService.substituteExercise(any(), any(), any())).thenReturn(dto);
+
+        mockMvc.perform(post("/api/sessions/exercises/" + UUID.randomUUID() + "/substitute")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new SubstituteExerciseRequest(UUID.randomUUID()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.substitutedExercise.name").value("Chest Press Machine"));
+    }
+
+    @Test
+    void substituteExercise_unownedWorkoutExercise_returns404() throws Exception {
+        when(sessionService.substituteExercise(any(), any(), any()))
+                .thenThrow(new NotFoundException("Workout exercise not found."));
+
+        mockMvc.perform(post("/api/sessions/exercises/" + UUID.randomUUID() + "/substitute")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new SubstituteExerciseRequest(UUID.randomUUID()))))
+                .andExpect(status().isNotFound());
     }
 }

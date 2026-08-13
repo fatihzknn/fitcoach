@@ -831,3 +831,73 @@ already tested — `ProfileController`, `WorkoutSessionController`,
   debt left unaddressed is near-zero frontend component/page test coverage
   (`frontend/src/**/__tests__` only covers `lib/session.ts` and `lib/utils.ts`), a
   separate and much larger gap not in scope here.
+
+## Exercise swap persistence
+
+Previously flagged as deliberately deferred (`product_roadmap` memory): the
+in-session "Swap" flow only ever changed what was *displayed*, in local React
+state — `SetLog`s always recorded against the original `workoutExerciseId`
+regardless, and a page refresh silently reverted the swap. This makes it real:
+a swap now persists **for the life of the plan** (until swapped again or a new
+plan is selected), not just the current session — the simplest mental model
+("I don't want to do this exercise anymore, sub it"), and the cheapest to
+implement correctly.
+
+- **`WorkoutExercise` gains a nullable `substitutedExercise`** (`V17` migration,
+  `substituted_exercise_id`). The original `exercise` field is untouched and
+  always stays the template's pick, so "Originally: X" displays keep working
+  unchanged. `getEffectiveExercise()` returns the substitute if set, else the
+  original.
+- **Real correctness bug caught during design, before writing any code**: the
+  obvious approach — resolve "which exercise does this history belong to" by
+  joining through `WorkoutExercise.substitutedExercise` at query time — has the
+  exact same plan-drift flaw already found and fixed once this session in
+  `getPreviousSets()` (comparing against *current* mutable state instead of
+  what was true *when the data was created*). Concretely: user swaps A→B, logs
+  sets against B for weeks, then swaps back to A — a query-time join would
+  retroactively reattribute those B sessions to A's history, since by query
+  time `substitutedExercise` is null again. **Fixed with a snapshot, not a
+  join**: `SetLog` gained its own `exercise` FK (`V17`'s `set_logs.exercise_id`,
+  backfilled from the then-current `workout_exercises.exercise_id` for every
+  historical row before being set `NOT NULL`), populated once at construction
+  time from `workoutExercise.getEffectiveExercise()` — never re-derived later.
+  `SetLogRepository`'s two history queries now filter on `s.exercise.id`
+  instead of `s.workoutExercise.exercise.id`. `SetLog`'s public constructor
+  signature is unchanged (the snapshot is computed internally), so none of the
+  ~10 existing call sites needed touching, and every existing test kept passing
+  unchanged (confirmed by running the full suite before writing new ones) —
+  the non-substituted case still resolves `getEffectiveExercise() ==
+  exercise`, identical to before.
+- **Fixed a related inconsistency this surfaced**: `WorkoutSessionService
+  .strugglingExerciseIdsForDay` and `WorkoutPlanService.isDeloadRecommended`
+  (from the earlier "kişiye özel program" part 3) were both still keying off
+  `we.getExercise()` (the original) instead of `we.getEffectiveExercise()` —
+  harmless before this feature existed (the two were always equal), but wrong
+  now: asking "are you struggling with X" about an exercise the user already
+  swapped away from doesn't match what their `SetLog` history is actually keyed
+  against post-swap. Both now use the effective exercise.
+- **New `POST /api/sessions/exercises/{workoutExerciseId}/substitute`**
+  (`exerciseId: null` clears the substitution), ownership-checked by walking
+  `workoutExercise -> workoutDay -> workoutPlan -> userId` (404, not 403 — same
+  can't-tell-"not-yours"-from-"doesn't-exist" reasoning as
+  `requireOwnedSession`).
+- **Frontend**: removed the local-only `swappedExercises` React map entirely —
+  `we.substitutedExercise` now comes straight from the session the backend
+  already returns, so there's one source of truth instead of two that could
+  drift. `SwapFlow` picking alternatives now works off whatever's *currently*
+  effective (already-swapped or original), not always back to the template's
+  original pick, so swapping a second time offers sensible alternatives.
+  Previous-sets/history fetches and PR detection everywhere now key off
+  `effectiveExerciseId(we)` instead of always `we.exercise.id`.
+- Verified end-to-end against local Docker Postgres on a **non-empty database**
+  (the `V17` backfill had real pre-existing `set_logs` rows to migrate, from
+  earlier demo/test data, and succeeded): logged a set on the original exercise,
+  confirmed its previous-sets; substituted to an alternative, confirmed the
+  substitute started with *empty* history and the original's history was
+  untouched; logged a set as the substitute, confirmed previous-sets/history
+  for the substitute updated while the original's stayed frozen; swapped back
+  to the original and logged a third set, confirmed the original's history
+  correctly shows 2 sessions (not 3 — the substitute's session never leaked in)
+  and the substitute's single frozen session was completely unaffected by the
+  swap-back. 201 → **209 backend tests**, `tsc`/`next lint`/11 frontend tests
+  clean.

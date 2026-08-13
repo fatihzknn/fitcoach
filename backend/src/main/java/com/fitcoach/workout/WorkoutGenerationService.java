@@ -431,7 +431,8 @@ public class WorkoutGenerationService {
                 isolation ? tp.iRepMax() : tp.cRepMax(),
                 isolation ? tp.iRir()    : tp.cRir(),
                 isolation ? tp.iRest()   : tp.cRest(),
-                ExerciseDto.from(exercise)
+                ExerciseDto.from(exercise),
+                null // a freshly-generated candidate plan never has a substitution yet
         );
     }
 

@@ -4,6 +4,7 @@ import com.fitcoach.auth.Role;
 import com.fitcoach.auth.jwt.CurrentUser;
 import com.fitcoach.common.NotFoundException;
 import com.fitcoach.exercise.Exercise;
+import com.fitcoach.exercise.ExerciseRepository;
 import com.fitcoach.exercise.domain.DifficultyLevel;
 import com.fitcoach.exercise.domain.MovementPattern;
 import com.fitcoach.exercise.domain.MuscleGroup;
@@ -12,6 +13,7 @@ import com.fitcoach.session.dto.CompleteSessionRequest;
 import com.fitcoach.session.dto.ExerciseHistoryEntryDto;
 import com.fitcoach.session.dto.LogSetRequest;
 import com.fitcoach.session.dto.PreviousSetDto;
+import com.fitcoach.session.dto.SubstituteExerciseRequest;
 import com.fitcoach.session.dto.WorkoutSessionDto;
 import com.fitcoach.session.domain.SessionStatus;
 import com.fitcoach.workout.WorkoutDay;
@@ -20,6 +22,7 @@ import com.fitcoach.workout.WorkoutExercise;
 import com.fitcoach.workout.WorkoutExerciseRepository;
 import com.fitcoach.workout.WorkoutPlan;
 import com.fitcoach.workout.WorkoutPlanRepository;
+import com.fitcoach.workout.dto.WorkoutExerciseDto;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -50,6 +53,7 @@ class WorkoutSessionServiceTest {
     @Mock private WorkoutPlanRepository planRepository;
     @Mock private WorkoutDayRepository dayRepository;
     @Mock private WorkoutExerciseRepository exerciseRepository;
+    @Mock private ExerciseRepository exerciseLibraryRepository;
 
     @InjectMocks
     private WorkoutSessionService service;
@@ -234,6 +238,105 @@ class WorkoutSessionServiceTest {
 
         assertThatThrownBy(() -> service.logSet(CURRENT_USER, session.getId(), request))
                 .isInstanceOf(NotFoundException.class);
+    }
+
+    // ─── substituteExercise ─────────────────────────────────────────────────────
+
+    @Test
+    void substituteExercise_setsTheSubstitution() {
+        WorkoutPlan plan = activePlan();
+        WorkoutDay day = new WorkoutDay(plan, 1, "Upper A");
+        WorkoutExercise we = workoutExercise(day, exercise("Barbell Bench Press"));
+        Exercise replacement = exercise("Chest Press Machine");
+
+        when(exerciseRepository.findById(we.getId())).thenReturn(Optional.of(we));
+        when(exerciseLibraryRepository.findById(replacement.getId())).thenReturn(Optional.of(replacement));
+        when(exerciseRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        WorkoutExerciseDto result = service.substituteExercise(CURRENT_USER, we.getId(),
+                new SubstituteExerciseRequest(replacement.getId()));
+
+        assertThat(result.exercise().name()).isEqualTo("Barbell Bench Press");
+        assertThat(result.substitutedExercise()).isNotNull();
+        assertThat(result.substitutedExercise().name()).isEqualTo("Chest Press Machine");
+    }
+
+    @Test
+    void substituteExercise_nullExerciseId_clearsSubstitution() {
+        WorkoutPlan plan = activePlan();
+        WorkoutDay day = new WorkoutDay(plan, 1, "Upper A");
+        WorkoutExercise we = workoutExercise(day, exercise("Barbell Bench Press"));
+        we.substitute(exercise("Chest Press Machine"));
+
+        when(exerciseRepository.findById(we.getId())).thenReturn(Optional.of(we));
+        when(exerciseRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        WorkoutExerciseDto result = service.substituteExercise(CURRENT_USER, we.getId(),
+                new SubstituteExerciseRequest(null));
+
+        assertThat(result.substitutedExercise()).isNull();
+    }
+
+    @Test
+    void substituteExercise_throwsWhenWorkoutExerciseNotFound() {
+        UUID missingId = UUID.randomUUID();
+        when(exerciseRepository.findById(missingId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.substituteExercise(CURRENT_USER, missingId,
+                new SubstituteExerciseRequest(UUID.randomUUID())))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void substituteExercise_throwsWhenReplacementExerciseNotFound() {
+        WorkoutPlan plan = activePlan();
+        WorkoutDay day = new WorkoutDay(plan, 1, "Upper A");
+        WorkoutExercise we = workoutExercise(day, exercise("Barbell Bench Press"));
+        UUID missingReplacementId = UUID.randomUUID();
+
+        when(exerciseRepository.findById(we.getId())).thenReturn(Optional.of(we));
+        when(exerciseLibraryRepository.findById(missingReplacementId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.substituteExercise(CURRENT_USER, we.getId(),
+                new SubstituteExerciseRequest(missingReplacementId)))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void substituteExercise_throwsWhenWorkoutExerciseBelongsToAnotherUser() {
+        WorkoutPlan othersPlan = new WorkoutPlan(UUID.randomUUID(), "Someone Else's Plan", MainGoal.FAT_LOSS, 3);
+        WorkoutDay day = new WorkoutDay(othersPlan, 1, "Full Body A");
+        WorkoutExercise we = workoutExercise(day, exercise("Barbell Bench Press"));
+
+        when(exerciseRepository.findById(we.getId())).thenReturn(Optional.of(we));
+
+        assertThatThrownBy(() -> service.substituteExercise(CURRENT_USER, we.getId(),
+                new SubstituteExerciseRequest(UUID.randomUUID())))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void logSet_afterSubstitution_snapshotsTheEffectiveExerciseOnTheSetLog() {
+        WorkoutPlan plan = activePlan();
+        WorkoutDay day = new WorkoutDay(plan, 1, "Upper A");
+        Exercise original = exercise("Barbell Bench Press");
+        Exercise substitute = exercise("Chest Press Machine");
+        WorkoutExercise we = workoutExercise(day, original);
+        we.substitute(substitute);
+        WorkoutSession session = new WorkoutSession(USER_ID, plan, day);
+
+        when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+        when(exerciseRepository.findById(we.getId())).thenReturn(Optional.of(we));
+        when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        LogSetRequest request = new LogSetRequest(we.getId(), 1, new BigDecimal("40.0"), 10, 2);
+        service.logSet(CURRENT_USER, session.getId(), request);
+
+        // The logged set is attributed to the substitute, not the original template
+        // pick — this is what makes previous-sets/history prefill work for whatever
+        // the user is actually performing after a swap.
+        SetLog logged = session.getSetLogs().get(0);
+        assertThat(logged.getExercise().getId()).isEqualTo(substitute.getId());
     }
 
     // ─── completeSession ────────────────────────────────────────────────────────

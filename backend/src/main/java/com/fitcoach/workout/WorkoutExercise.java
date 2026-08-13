@@ -28,6 +28,13 @@ public class WorkoutExercise extends BaseEntity {
     @JoinColumn(name = "exercise_id", nullable = false)
     private Exercise exercise;
 
+    /** A user-chosen replacement for this slot, persisted for the life of the plan
+     *  (until swapped again or a new plan is selected) — not the same as the
+     *  original template's exercise, which stays fixed as a historical record. */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "substituted_exercise_id")
+    private Exercise substitutedExercise;
+
     @Column(name = "order_index", nullable = false)
     private int orderIndex;
 
@@ -64,9 +71,27 @@ public class WorkoutExercise extends BaseEntity {
         this.restSeconds = restSeconds;
     }
 
+    public void substitute(Exercise replacement) {
+        this.substitutedExercise = replacement;
+    }
+
+    public void clearSubstitution() {
+        this.substitutedExercise = null;
+    }
+
+    /** The exercise actually being performed for this slot right now — the
+     *  substitute if one is set, otherwise the original. Sets logged against this
+     *  slot are always attributed to whichever exercise was effective at the time
+     *  (see SetLog's constructor), not re-derived later, so a later swap-back never
+     *  retroactively changes history that was already logged. */
+    public Exercise getEffectiveExercise() {
+        return substitutedExercise != null ? substitutedExercise : exercise;
+    }
+
     public UUID getId() { return id; }
     public WorkoutDay getWorkoutDay() { return workoutDay; }
     public Exercise getExercise() { return exercise; }
+    public Exercise getSubstitutedExercise() { return substitutedExercise; }
     public int getOrderIndex() { return orderIndex; }
     public int getSets() { return sets; }
     public int getRepRangeMin() { return repRangeMin; }

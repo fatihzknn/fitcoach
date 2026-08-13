@@ -2,11 +2,14 @@ package com.fitcoach.session;
 
 import com.fitcoach.auth.jwt.CurrentUser;
 import com.fitcoach.common.NotFoundException;
+import com.fitcoach.exercise.Exercise;
+import com.fitcoach.exercise.ExerciseRepository;
 import com.fitcoach.session.domain.SessionStatus;
 import com.fitcoach.session.dto.CompleteSessionRequest;
 import com.fitcoach.session.dto.ExerciseHistoryEntryDto;
 import com.fitcoach.session.dto.LogSetRequest;
 import com.fitcoach.session.dto.PreviousSetDto;
+import com.fitcoach.session.dto.SubstituteExerciseRequest;
 import com.fitcoach.session.dto.WorkoutSessionDto;
 import com.fitcoach.workout.WorkoutDay;
 import com.fitcoach.workout.WorkoutDayRepository;
@@ -14,6 +17,7 @@ import com.fitcoach.workout.WorkoutExercise;
 import com.fitcoach.workout.WorkoutExerciseRepository;
 import com.fitcoach.workout.WorkoutPlan;
 import com.fitcoach.workout.WorkoutPlanRepository;
+import com.fitcoach.workout.dto.WorkoutExerciseDto;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,17 +42,20 @@ public class WorkoutSessionService {
     private final WorkoutPlanRepository planRepository;
     private final WorkoutDayRepository dayRepository;
     private final WorkoutExerciseRepository exerciseRepository;
+    private final ExerciseRepository exerciseLibraryRepository;
 
     public WorkoutSessionService(WorkoutSessionRepository sessionRepository,
                                   SetLogRepository setLogRepository,
                                   WorkoutPlanRepository planRepository,
                                   WorkoutDayRepository dayRepository,
-                                  WorkoutExerciseRepository exerciseRepository) {
+                                  WorkoutExerciseRepository exerciseRepository,
+                                  ExerciseRepository exerciseLibraryRepository) {
         this.sessionRepository = sessionRepository;
         this.setLogRepository = setLogRepository;
         this.planRepository = planRepository;
         this.dayRepository = dayRepository;
         this.exerciseRepository = exerciseRepository;
+        this.exerciseLibraryRepository = exerciseLibraryRepository;
     }
 
     @Transactional
@@ -97,6 +104,34 @@ public class WorkoutSessionService {
         session.addSetLog(log);
 
         return WorkoutSessionDto.from(sessionRepository.save(session));
+    }
+
+    /**
+     * Swaps (or clears) the exercise for one slot in the user's plan — persisted for
+     * the life of the plan, not just the current session, so it also applies to every
+     * future session on this workout day until changed again or a new plan is
+     * selected. Ownership is verified by walking workoutExercise -> workoutDay ->
+     * workoutPlan -> userId (mirrors requireOwnedSession's 404-not-403 pattern: the
+     * caller can't tell "not yours" from "doesn't exist" by probing UUIDs).
+     */
+    @Transactional
+    public WorkoutExerciseDto substituteExercise(CurrentUser currentUser, UUID workoutExerciseId,
+                                                   SubstituteExerciseRequest request) {
+        WorkoutExercise workoutExercise = exerciseRepository.findById(workoutExerciseId)
+                .orElseThrow(() -> new NotFoundException("Workout exercise not found."));
+        if (!workoutExercise.getWorkoutDay().getWorkoutPlan().getUserId().equals(currentUser.id())) {
+            throw new NotFoundException("Workout exercise not found.");
+        }
+
+        if (request.exerciseId() == null) {
+            workoutExercise.clearSubstitution();
+        } else {
+            Exercise replacement = exerciseLibraryRepository.findById(request.exerciseId())
+                    .orElseThrow(() -> new NotFoundException("Exercise not found."));
+            workoutExercise.substitute(replacement);
+        }
+
+        return WorkoutExerciseDto.from(exerciseRepository.save(workoutExercise));
     }
 
     @Transactional
@@ -228,8 +263,11 @@ public class WorkoutSessionService {
     }
 
     private Set<UUID> strugglingExerciseIdsForDay(UUID userId, WorkoutDay day) {
+        // Effective, not original — if the user already swapped away from a slot's
+        // template exercise, "are you struggling" should ask about what they're
+        // actually doing now, which is also what SetLog history is keyed against.
         List<UUID> exerciseIds = day.getExercises().stream()
-                .map(we -> we.getExercise().getId())
+                .map(we -> we.getEffectiveExercise().getId())
                 .distinct()
                 .toList();
         return findStrugglingExercises(userId, exerciseIds);

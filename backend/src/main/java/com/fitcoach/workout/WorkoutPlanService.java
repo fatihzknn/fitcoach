@@ -213,7 +213,7 @@ public class WorkoutPlanService {
 
         List<UUID> exerciseIds = plan.getDays().stream()
                 .flatMap(day -> day.getExercises().stream())
-                .map(we -> we.getExercise().getId())
+                .map(we -> we.getEffectiveExercise().getId())
                 .distinct()
                 .toList();
         return !sessionService.findStrugglingExercises(plan.getUserId(), exerciseIds).isEmpty();

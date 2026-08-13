@@ -1,6 +1,7 @@
 package com.fitcoach.session;
 
 import com.fitcoach.common.BaseEntity;
+import com.fitcoach.exercise.Exercise;
 import com.fitcoach.workout.WorkoutExercise;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -29,6 +30,14 @@ public class SetLog extends BaseEntity {
     @JoinColumn(name = "workout_exercise_id", nullable = false)
     private WorkoutExercise workoutExercise;
 
+    /** Snapshot of whichever exercise was actually effective (substituted or
+     *  original) at the moment this set was logged — never re-derived later, so a
+     *  future swap-back on the WorkoutExercise slot can't retroactively change which
+     *  exercise's history/progression this row counts toward. */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "exercise_id", nullable = false)
+    private Exercise exercise;
+
     @Column(name = "set_number", nullable = false)
     private int setNumber;
 
@@ -51,6 +60,7 @@ public class SetLog extends BaseEntity {
         this.id = UUID.randomUUID();
         this.workoutSession = workoutSession;
         this.workoutExercise = workoutExercise;
+        this.exercise = workoutExercise.getEffectiveExercise();
         this.setNumber = setNumber;
         this.weightKg = weightKg;
         this.repsCompleted = repsCompleted;
@@ -60,6 +70,7 @@ public class SetLog extends BaseEntity {
     public UUID getId() { return id; }
     public WorkoutSession getWorkoutSession() { return workoutSession; }
     public WorkoutExercise getWorkoutExercise() { return workoutExercise; }
+    public Exercise getExercise() { return exercise; }
     public int getSetNumber() { return setNumber; }
     public BigDecimal getWeightKg() { return weightKg; }
     public int getRepsCompleted() { return repsCompleted; }

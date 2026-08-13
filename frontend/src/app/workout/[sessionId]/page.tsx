@@ -334,7 +334,6 @@ function SetRow({
 
 interface ExerciseBlockProps {
   we: WorkoutExerciseDto;
-  swappedExercise: ExerciseDto | undefined;
   previousSets: PreviousSetDto[];
   loggedSets: Map<string, { weightKg: string; repsCompleted: string }>;
   prKeys: Set<string>;
@@ -347,7 +346,6 @@ interface ExerciseBlockProps {
 
 function ExerciseBlock({
   we,
-  swappedExercise,
   previousSets,
   loggedSets,
   prKeys,
@@ -358,7 +356,8 @@ function ExerciseBlock({
   disabled,
 }: ExerciseBlockProps) {
   const { t } = useI18n();
-  const display = swappedExercise ?? we.exercise;
+  const swapped = we.substitutedExercise;
+  const display = swapped ?? we.exercise;
   const sets = Array.from({ length: we.sets }, (_, i) => i + 1);
   const doneCount = sets.filter((n) => loggedSets.has(`${we.id}:${n}`)).length;
 
@@ -369,18 +368,18 @@ function ExerciseBlock({
           <div className="flex items-center gap-2 flex-wrap">
             <button
               className="font-semibold text-left hover:text-primary transition-colors"
-              onClick={() => onShowHistory(we.exercise.id, display.name)}
+              onClick={() => onShowHistory(display.id, display.name)}
             >
               {display.name}
             </button>
-            {swappedExercise && (
+            {swapped && (
               <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary">
                 <RefreshCw className="h-2.5 w-2.5" />
                 {t("swapped")}
               </span>
             )}
             <button
-              onClick={() => onShowHistory(we.exercise.id, display.name)}
+              onClick={() => onShowHistory(display.id, display.name)}
               className="text-muted-foreground hover:text-primary transition-colors"
               title={t("View progression")}
               aria-label={t("View exercise progression")}
@@ -391,12 +390,12 @@ function ExerciseBlock({
           <p className="text-xs text-muted-foreground">
             {t(display.primaryMuscleGroup)} · {doneCount}/{we.sets} {t("sets done")}
           </p>
-          {swappedExercise && (
+          {swapped && (
             <p className="text-xs text-muted-foreground/55">
               {t("Originally:")} {we.exercise.name}
             </p>
           )}
-          {!swappedExercise && isStruggling && (
+          {!swapped && isStruggling && (
             <button
               onClick={() => onSwap(we, true)}
               className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-400 hover:bg-amber-500/25 transition-colors"
@@ -473,6 +472,9 @@ interface SwapFlowProps {
 function SwapFlow({ we, suggested, onConfirm, onClose }: SwapFlowProps) {
   const { t } = useI18n();
   const [step, setStep] = React.useState<SwapStep>(suggested ? "alternatives" : "reason");
+  // Swapping again picks alternatives relative to whatever the user is currently
+  // doing (already-swapped or original), not always back to the template's pick.
+  const current = we.substitutedExercise ?? we.exercise;
 
   function handleReason(value: string) {
     if (value === "CAUSES_PAIN") {
@@ -492,7 +494,7 @@ function SwapFlow({ we, suggested, onConfirm, onClose }: SwapFlowProps) {
           <>
             <div className="flex items-center justify-between">
               <h2 className="font-display text-lg font-bold">
-                {t("Why can't you do {name}?", { name: we.exercise.name })}
+                {t("Why can't you do {name}?", { name: current.name })}
               </h2>
               <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl leading-none">✕</button>
             </div>
@@ -546,11 +548,11 @@ function SwapFlow({ we, suggested, onConfirm, onClose }: SwapFlowProps) {
               </button>
               <h2 className="font-display text-lg font-bold">{t("Pick a replacement")}</h2>
             </div>
-            {we.exercise.alternatives.length === 0 ? (
+            {current.alternatives.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">{t("No alternatives recorded yet.")}</p>
             ) : (
               <div className="space-y-2">
-                {we.exercise.alternatives.map((alt, i) => (
+                {current.alternatives.map((alt, i) => (
                   <button
                     key={alt.id}
                     onClick={() => onConfirm(we.id, alt)}
@@ -626,6 +628,13 @@ function CompletionOverlay({
 // Page
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** The exercise actually being performed for a slot — the substitute if one is
+ *  set, otherwise the original. Previous-sets/history are always fetched and
+ *  cached keyed by this, matching how the backend attributes SetLogs. */
+function effectiveExerciseId(we: WorkoutExerciseDto): string {
+  return we.substitutedExercise?.id ?? we.exercise.id;
+}
+
 export default function WorkoutSessionPage() {
   const { t } = useI18n();
   const params = useParams();
@@ -635,7 +644,6 @@ export default function WorkoutSessionPage() {
   const [session, setSession] = React.useState<WorkoutSessionDto | null>(null);
   const [previousByExercise, setPreviousByExercise] = React.useState<Map<string, PreviousSetDto[]>>(new Map());
   const [loggedSets, setLoggedSets] = React.useState<Map<string, { weightKg: string; repsCompleted: string }>>(new Map());
-  const [swappedExercises, setSwappedExercises] = React.useState<Map<string, ExerciseDto>>(new Map());
   const [prKeys, setPrKeys] = React.useState<Set<string>>(new Set());
   const [swapTarget, setSwapTarget] = React.useState<{ we: WorkoutExerciseDto; suggested: boolean } | null>(null);
   const [restTimer, setRestTimer] = React.useState<{ remaining: number; total: number; exerciseName: string } | null>(null);
@@ -670,9 +678,10 @@ export default function WorkoutSessionPage() {
         const byExercise = new Map<string, PreviousSetDto[]>();
         await Promise.all(
           s.workoutDay.exercises.map(async (we) => {
+            const id = effectiveExerciseId(we);
             try {
-              const prev = await api.getPreviousSets(we.exercise.id);
-              byExercise.set(we.exercise.id, prev);
+              const prev = await api.getPreviousSets(id);
+              byExercise.set(id, prev);
             } catch { /* no history */ }
           }),
         );
@@ -746,7 +755,7 @@ export default function WorkoutSessionPage() {
       // PR detection — compare with previous session's best weight
       const we = session.workoutDay.exercises.find((e) => e.id === weId);
       if (we) {
-        const prevSets = previousByExercise.get(we.exercise.id) ?? [];
+        const prevSets = previousByExercise.get(effectiveExerciseId(we)) ?? [];
         const prevMax = prevSets.reduce((m, s) => Math.max(m, s.weightKg ?? 0), 0);
         const logged = weight ? parseFloat(weight) : 0;
         if (logged > 0 && prevSets.length > 0 && logged > prevMax) {
@@ -755,7 +764,7 @@ export default function WorkoutSessionPage() {
 
         // Start rest timer
         if (we.restSeconds > 0) {
-          const displayName = (swappedExercises.get(weId) ?? we.exercise).name;
+          const displayName = (we.substitutedExercise ?? we.exercise).name;
           setRestTimer({ remaining: we.restSeconds, total: we.restSeconds, exerciseName: displayName });
         }
       }
@@ -782,9 +791,32 @@ export default function WorkoutSessionPage() {
     }
   }
 
-  function handleSwapConfirm(weId: string, alternative: ExerciseDto) {
-    setSwappedExercises((prev) => { const n = new Map(prev); n.set(weId, alternative); return n; });
+  async function handleSwapConfirm(weId: string, alternative: ExerciseDto) {
     setSwapTarget(null);
+    try {
+      const updatedExercise = await api.substituteExercise(weId, alternative.id);
+      setSession((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          workoutDay: {
+            ...prev.workoutDay,
+            exercises: prev.workoutDay.exercises.map((we) => (we.id === weId ? updatedExercise : we)),
+          },
+        };
+      });
+      // The swapped-to exercise may not have previous-sets cached yet (first time
+      // it's used in this slot) — fetch it so prefill/PR detection work right away.
+      const newId = effectiveExerciseId(updatedExercise);
+      if (!previousByExercise.has(newId)) {
+        try {
+          const prev = await api.getPreviousSets(newId);
+          setPreviousByExercise((map) => new Map(map).set(newId, prev));
+        } catch { /* no history for this exercise yet */ }
+      }
+    } catch (err: unknown) {
+      setError(err instanceof ApiError ? err.message : t("Could not swap exercise. Please try again."));
+    }
   }
 
   const totalSets = session?.workoutDay.exercises.reduce((s, we) => s + we.sets, 0) ?? 0;
@@ -842,11 +874,10 @@ export default function WorkoutSessionPage() {
               <CardContent className="p-4">
                 <ExerciseBlock
                   we={we}
-                  swappedExercise={swappedExercises.get(we.id)}
-                  previousSets={previousByExercise.get(we.exercise.id) ?? []}
+                  previousSets={previousByExercise.get(effectiveExerciseId(we)) ?? []}
                   loggedSets={loggedSets}
                   prKeys={prKeys}
-                  isStruggling={session.strugglingExerciseIds.includes(we.exercise.id)}
+                  isStruggling={session.strugglingExerciseIds.includes(effectiveExerciseId(we))}
                   onLog={handleLog}
                   onSwap={(target, suggested) => setSwapTarget({ we: target, suggested: !!suggested })}
                   onShowHistory={openHistory}

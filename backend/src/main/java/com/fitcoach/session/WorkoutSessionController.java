@@ -6,7 +6,9 @@ import com.fitcoach.session.dto.ExerciseHistoryEntryDto;
 import com.fitcoach.session.dto.LogSetRequest;
 import com.fitcoach.session.dto.PreviousSetDto;
 import com.fitcoach.session.dto.StartSessionRequest;
+import com.fitcoach.session.dto.SubstituteExerciseRequest;
 import com.fitcoach.session.dto.WorkoutSessionDto;
+import com.fitcoach.workout.dto.WorkoutExerciseDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -69,6 +71,16 @@ public class WorkoutSessionController {
             @RequestBody(required = false) CompleteSessionRequest request) {
         return sessionService.completeSession(currentUser, id,
                 request != null ? request : new CompleteSessionRequest(null));
+    }
+
+    @PostMapping("/exercises/{workoutExerciseId}/substitute")
+    @Operation(summary = "Swap (or clear, with a null exerciseId) the exercise for one slot in the plan — " +
+            "persists for the life of the plan, not just the current session")
+    public WorkoutExerciseDto substituteExercise(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable UUID workoutExerciseId,
+            @RequestBody SubstituteExerciseRequest request) {
+        return sessionService.substituteExercise(currentUser, workoutExerciseId, request);
     }
 
     @GetMapping("/history")
