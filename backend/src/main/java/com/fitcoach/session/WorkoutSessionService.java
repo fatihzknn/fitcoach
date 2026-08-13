@@ -19,15 +19,19 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 public class WorkoutSessionService {
+
+    private static final int STRUGGLE_LOOKBACK_SESSIONS = 2;
 
     private final WorkoutSessionRepository sessionRepository;
     private final SetLogRepository setLogRepository;
@@ -68,7 +72,8 @@ public class WorkoutSessionService {
         }
 
         WorkoutSession session = new WorkoutSession(currentUser.id(), plan, day);
-        return WorkoutSessionDto.from(sessionRepository.save(session));
+        WorkoutSession saved = sessionRepository.save(session);
+        return WorkoutSessionDto.from(saved, strugglingExerciseIdsForDay(currentUser.id(), day));
     }
 
     @Transactional
@@ -112,7 +117,7 @@ public class WorkoutSessionService {
         WorkoutSession session = sessionRepository
                 .findByUserIdAndStatus(currentUser.id(), SessionStatus.IN_PROGRESS)
                 .orElseThrow(() -> new NotFoundException("No active session."));
-        return WorkoutSessionDto.from(session);
+        return WorkoutSessionDto.from(session, strugglingExerciseIdsForDay(currentUser.id(), session.getWorkoutDay()));
     }
 
     @Transactional(readOnly = true)
@@ -177,6 +182,57 @@ public class WorkoutSessionService {
                     return new ExerciseHistoryEntryDto(date, maxWeight, bestReps, sessionLogs.size());
                 })
                 .toList();
+    }
+
+    /**
+     * An exercise "struggles" when, in each of the user's most recent
+     * STRUGGLE_LOOKBACK_SESSIONS completed sessions logging it, a majority of sets
+     * missed the bottom of what was prescribed AT THE TIME. Each SetLog is compared
+     * against its own WorkoutExercise.repRangeMin (what was actually prescribed when
+     * that set was logged) — never against today's active plan's prescription, since
+     * a new plan creates brand-new WorkoutExercise rows and old SetLogs still point
+     * at the old ones. Requires the full lookback window of history; a new exercise
+     * never false-positives from too little data.
+     */
+    @Transactional(readOnly = true)
+    public Set<UUID> findStrugglingExercises(UUID userId, Collection<UUID> exerciseIds) {
+        return exerciseIds.stream()
+                .filter(id -> isStruggling(userId, id))
+                .collect(Collectors.toSet());
+    }
+
+    private boolean isStruggling(UUID userId, UUID exerciseId) {
+        // Grouping must use LinkedHashMap, not a plain HashMap — same reasoning as
+        // getPreviousSets(): the query returns DESC by session date, and only a
+        // LinkedHashMap preserves that order when picking "the most recent N sessions".
+        Map<UUID, List<SetLog>> bySession = setLogRepository.findRecentByUserAndExercise(userId, exerciseId)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        s -> s.getWorkoutSession().getId(),
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+
+        List<List<SetLog>> recentSessions = bySession.values().stream()
+                .limit(STRUGGLE_LOOKBACK_SESSIONS)
+                .toList();
+        if (recentSessions.size() < STRUGGLE_LOOKBACK_SESSIONS) {
+            return false;
+        }
+
+        return recentSessions.stream().allMatch(sets -> {
+            long missed = sets.stream()
+                    .filter(s -> s.getRepsCompleted() < s.getWorkoutExercise().getRepRangeMin())
+                    .count();
+            return missed * 2 >= sets.size();
+        });
+    }
+
+    private Set<UUID> strugglingExerciseIdsForDay(UUID userId, WorkoutDay day) {
+        List<UUID> exerciseIds = day.getExercises().stream()
+                .map(we -> we.getExercise().getId())
+                .distinct()
+                .toList();
+        return findStrugglingExercises(userId, exerciseIds);
     }
 
     private WorkoutSession requireOwnedSession(UUID userId, UUID sessionId) {

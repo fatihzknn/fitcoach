@@ -383,4 +383,152 @@ class WorkoutSessionServiceTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).status()).isEqualTo(SessionStatus.COMPLETED);
     }
+
+    // ─── findStrugglingExercises ───────────────────────────────────────────────
+
+    private SetLog setLogWithReps(WorkoutSession session, WorkoutExercise we, int setNumber, int reps) {
+        return new SetLog(session, we, setNumber, new BigDecimal("40.0"), reps, null);
+    }
+
+    @Test
+    void findStrugglingExercises_flagsExerciseWhenBothOfLastTwoSessionsMissedRepMin() {
+        WorkoutPlan plan = activePlan();
+        WorkoutDay day = new WorkoutDay(plan, 1, "Upper A");
+        Exercise ex = exercise("Bench Press");
+        WorkoutExercise we = workoutExercise(day, ex); // repRangeMin = 8
+
+        WorkoutSession older = new WorkoutSession(USER_ID, plan, day);
+        WorkoutSession recent = new WorkoutSession(USER_ID, plan, day);
+        // Both sessions: reps below repRangeMin (8) on every set.
+        List<SetLog> logs = List.of(
+                setLogWithReps(recent, we, 1, 6),
+                setLogWithReps(recent, we, 2, 5),
+                setLogWithReps(older, we, 1, 6),
+                setLogWithReps(older, we, 2, 5)
+        );
+        when(setLogRepository.findRecentByUserAndExercise(USER_ID, ex.getId())).thenReturn(logs);
+
+        var result = service.findStrugglingExercises(USER_ID, List.of(ex.getId()));
+
+        assertThat(result).containsExactly(ex.getId());
+    }
+
+    @Test
+    void findStrugglingExercises_doesNotFlagWhenOnlyOneSessionHasHistory() {
+        WorkoutPlan plan = activePlan();
+        WorkoutDay day = new WorkoutDay(plan, 1, "Upper A");
+        Exercise ex = exercise("Bench Press");
+        WorkoutExercise we = workoutExercise(day, ex);
+
+        WorkoutSession onlySession = new WorkoutSession(USER_ID, plan, day);
+        List<SetLog> logs = List.of(setLogWithReps(onlySession, we, 1, 3));
+        when(setLogRepository.findRecentByUserAndExercise(USER_ID, ex.getId())).thenReturn(logs);
+
+        var result = service.findStrugglingExercises(USER_ID, List.of(ex.getId()));
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void findStrugglingExercises_doesNotFlagWhenMostSetsHitTheRange() {
+        WorkoutPlan plan = activePlan();
+        WorkoutDay day = new WorkoutDay(plan, 1, "Upper A");
+        Exercise ex = exercise("Bench Press");
+        WorkoutExercise we = workoutExercise(day, ex); // repRangeMin = 8
+
+        WorkoutSession older = new WorkoutSession(USER_ID, plan, day);
+        WorkoutSession recent = new WorkoutSession(USER_ID, plan, day);
+        List<SetLog> logs = List.of(
+                setLogWithReps(recent, we, 1, 9),
+                setLogWithReps(recent, we, 2, 10),
+                setLogWithReps(older, we, 1, 8),
+                setLogWithReps(older, we, 2, 9)
+        );
+        when(setLogRepository.findRecentByUserAndExercise(USER_ID, ex.getId())).thenReturn(logs);
+
+        var result = service.findStrugglingExercises(USER_ID, List.of(ex.getId()));
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void findStrugglingExercises_usesHistoricalWorkoutExerciseRepRangeNotTodaysPlan() {
+        // Plan-drift scenario: an older session's set is judged against the
+        // repRangeMin that was actually prescribed for it back then (8), not
+        // whatever a newer WorkoutExercise row for the same Exercise prescribes now.
+        WorkoutPlan plan = activePlan();
+        WorkoutDay oldDay = new WorkoutDay(plan, 1, "Upper A");
+        WorkoutDay newDay = new WorkoutDay(plan, 1, "Upper A");
+        Exercise ex = exercise("Bench Press");
+        WorkoutExercise oldWe = new WorkoutExercise(oldDay, ex, 1, 3, 8, 12, "2 RIR", 90); // repRangeMin 8
+        WorkoutExercise newWe = new WorkoutExercise(newDay, ex, 1, 3, 5, 8, "2 RIR", 90);  // repRangeMin 5
+
+        WorkoutSession olderSession = new WorkoutSession(USER_ID, plan, oldDay);
+        WorkoutSession recentSession = new WorkoutSession(USER_ID, plan, newDay);
+        List<SetLog> logs = List.of(
+                // Recent session, against newWe's repRangeMin=5: 6 reps clears it -> not missed.
+                setLogWithReps(recentSession, newWe, 1, 6),
+                // Older session, against oldWe's repRangeMin=8: 6 reps misses it -> missed.
+                setLogWithReps(olderSession, oldWe, 1, 6)
+        );
+        when(setLogRepository.findRecentByUserAndExercise(USER_ID, ex.getId())).thenReturn(logs);
+
+        var result = service.findStrugglingExercises(USER_ID, List.of(ex.getId()));
+
+        // Only one of the two sessions actually missed its own prescribed range,
+        // so the exercise is not (yet) struggling.
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void startSession_populatesStrugglingExerciseIds() {
+        WorkoutPlan plan = activePlan();
+        WorkoutDay day = new WorkoutDay(plan, 1, "Upper A");
+        Exercise ex = exercise("Bench Press");
+        WorkoutExercise we = workoutExercise(day, ex);
+        day.addExercise(we);
+
+        WorkoutSession older = new WorkoutSession(USER_ID, plan, day);
+        WorkoutSession recent = new WorkoutSession(USER_ID, plan, day);
+        List<SetLog> logs = List.of(
+                setLogWithReps(recent, we, 1, 5),
+                setLogWithReps(older, we, 1, 5)
+        );
+
+        when(sessionRepository.findByUserIdAndStatus(USER_ID, SessionStatus.IN_PROGRESS))
+                .thenReturn(Optional.empty());
+        when(dayRepository.findById(day.getId())).thenReturn(Optional.of(day));
+        when(planRepository.findByUserIdAndIsActiveTrue(USER_ID)).thenReturn(Optional.of(plan));
+        when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(setLogRepository.findRecentByUserAndExercise(USER_ID, ex.getId())).thenReturn(logs);
+
+        WorkoutSessionDto result = service.startSession(CURRENT_USER, day.getId());
+
+        assertThat(result.strugglingExerciseIds()).containsExactly(ex.getId());
+    }
+
+    @Test
+    void getActiveSession_populatesStrugglingExerciseIds() {
+        WorkoutPlan plan = activePlan();
+        WorkoutDay day = new WorkoutDay(plan, 1, "Upper A");
+        Exercise ex = exercise("Bench Press");
+        WorkoutExercise we = workoutExercise(day, ex);
+        day.addExercise(we);
+        WorkoutSession active = new WorkoutSession(USER_ID, plan, day);
+
+        WorkoutSession older = new WorkoutSession(USER_ID, plan, day);
+        WorkoutSession recent = new WorkoutSession(USER_ID, plan, day);
+        List<SetLog> logs = List.of(
+                setLogWithReps(recent, we, 1, 5),
+                setLogWithReps(older, we, 1, 5)
+        );
+
+        when(sessionRepository.findByUserIdAndStatus(USER_ID, SessionStatus.IN_PROGRESS))
+                .thenReturn(Optional.of(active));
+        when(setLogRepository.findRecentByUserAndExercise(USER_ID, ex.getId())).thenReturn(logs);
+
+        WorkoutSessionDto result = service.getActiveSession(CURRENT_USER);
+
+        assertThat(result.strugglingExerciseIds()).containsExactly(ex.getId());
+    }
 }

@@ -6,6 +6,7 @@ import com.fitcoach.exercise.Exercise;
 import com.fitcoach.exercise.ExerciseRepository;
 import com.fitcoach.profile.FitnessProfile;
 import com.fitcoach.profile.FitnessProfileRepository;
+import com.fitcoach.session.WorkoutSessionService;
 import com.fitcoach.trainer.TrainerPhilosophy;
 import com.fitcoach.trainer.TrainerPhilosophyRepository;
 import com.fitcoach.trainer.TrainerVisibility;
@@ -36,17 +37,20 @@ public class WorkoutPlanService {
     private final ExerciseRepository exerciseRepository;
     private final WorkoutGenerationService generationService;
     private final TrainerPhilosophyRepository trainerRepository;
+    private final WorkoutSessionService sessionService;
 
     public WorkoutPlanService(WorkoutPlanRepository planRepository,
                                FitnessProfileRepository profileRepository,
                                ExerciseRepository exerciseRepository,
                                WorkoutGenerationService generationService,
-                               TrainerPhilosophyRepository trainerRepository) {
+                               TrainerPhilosophyRepository trainerRepository,
+                               WorkoutSessionService sessionService) {
         this.planRepository = planRepository;
         this.profileRepository = profileRepository;
         this.exerciseRepository = exerciseRepository;
         this.generationService = generationService;
         this.trainerRepository = trainerRepository;
+        this.sessionService = sessionService;
     }
 
     @Transactional(readOnly = true)
@@ -197,11 +201,30 @@ public class WorkoutPlanService {
     }
 
     /**
+     * True when either the plan has run at least as long as its trainer's
+     * recommended deload frequency, OR the user is currently struggling with one
+     * or more of its exercises (see WorkoutSessionService.findStrugglingExercises)
+     * — a performance-aware trigger independent of elapsed time, so it also fires
+     * for trainer-built custom plans (which have no trainer philosophy at all, so
+     * the time-based check alone would never apply to them).
+     */
+    private boolean isDeloadRecommended(WorkoutPlan plan) {
+        if (isTimeBasedDeloadDue(plan)) return true;
+
+        List<UUID> exerciseIds = plan.getDays().stream()
+                .flatMap(day -> day.getExercises().stream())
+                .map(we -> we.getExercise().getId())
+                .distinct()
+                .toList();
+        return !sessionService.findStrugglingExercises(plan.getUserId(), exerciseIds).isEmpty();
+    }
+
+    /**
      * True once the plan has run at least as long as its trainer's recommended
      * deload frequency — TrainerPhilosophy.deloadFrequencyWeeks has been seeded
      * since Phase 9 but was never read anywhere until now.
      */
-    private boolean isDeloadRecommended(WorkoutPlan plan) {
+    private boolean isTimeBasedDeloadDue(WorkoutPlan plan) {
         if (plan.getTrainerPhilosophyId() == null) return false;
         return trainerRepository.findById(plan.getTrainerPhilosophyId())
                 .map(trainer -> {

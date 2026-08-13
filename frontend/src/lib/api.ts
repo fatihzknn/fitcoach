@@ -242,6 +242,10 @@ export interface WorkoutSessionDto {
   startedAt: string;
   completedAt: string | null;
   setLogs: SetLogDto[];
+  /** Exercise IDs (not workout-exercise IDs) the user has struggled to hit the
+   *  prescribed rep range on across their last couple of sessions. A pre-session
+   *  hint, not a live indicator — only computed when a session starts/is fetched. */
+  strugglingExerciseIds: string[];
 }
 
 export interface PreviousSetDto {

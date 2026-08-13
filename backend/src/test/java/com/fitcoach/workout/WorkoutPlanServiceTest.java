@@ -10,12 +10,14 @@ import com.fitcoach.exercise.domain.MovementPattern;
 import com.fitcoach.exercise.domain.MuscleGroup;
 import com.fitcoach.profile.FitnessProfileRepository;
 import com.fitcoach.profile.domain.MainGoal;
+import com.fitcoach.session.WorkoutSessionService;
 import com.fitcoach.trainer.TrainerPhilosophy;
 import com.fitcoach.trainer.TrainerPhilosophyRepository;
 import com.fitcoach.workout.dto.CreateCustomPlanRequest;
 import com.fitcoach.workout.dto.CustomPlanDayRequest;
 import com.fitcoach.workout.dto.CustomPlanExerciseRequest;
 import com.fitcoach.workout.dto.WorkoutPlanDto;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -27,6 +29,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,12 +55,21 @@ class WorkoutPlanServiceTest {
     @Mock private ExerciseRepository exerciseRepository;
     @Mock private WorkoutGenerationService generationService;
     @Mock private TrainerPhilosophyRepository trainerRepository;
+    @Mock private WorkoutSessionService sessionService;
 
     @InjectMocks
     private WorkoutPlanService service;
 
     private static final UUID USER_ID = UUID.randomUUID();
     private static final CurrentUser CURRENT_USER = new CurrentUser(USER_ID, "test@example.com", Role.USER);
+
+    @BeforeEach
+    void defaultNoStrugglingExercises() {
+        // Struggle-based deload is a second, independent trigger alongside the
+        // time-based one — default every test to "nothing struggling" so existing
+        // time-based assertions aren't affected; tests that care override this.
+        lenient().when(sessionService.findStrugglingExercises(any(), any())).thenReturn(Set.of());
+    }
 
     private WorkoutPlan mockPlan(UUID trainerId, Instant createdAt) {
         WorkoutPlan plan = mock(WorkoutPlan.class);
@@ -125,6 +137,36 @@ class WorkoutPlanServiceTest {
         WorkoutPlan plan = mockPlan(trainerId, Instant.now().minus(20 * 7, ChronoUnit.DAYS));
         when(planRepository.findByUserIdAndIsActiveTrue(USER_ID)).thenReturn(Optional.of(plan));
         when(trainerRepository.findById(trainerId)).thenReturn(Optional.empty());
+
+        WorkoutPlanDto result = service.getActivePlan(CURRENT_USER);
+
+        assertThat(result.deloadRecommended()).isFalse();
+    }
+
+    @Test
+    void deloadRecommendedWhenStruggleDetectedEvenIfTimeNotElapsed() {
+        // Fresh plan (createdAt = now) — the time-based check alone would say no —
+        // but the user is struggling with an exercise in the plan.
+        UUID trainerId = UUID.randomUUID();
+        WorkoutPlan plan = mockPlan(trainerId, Instant.now());
+        TrainerPhilosophy trainer = mockTrainer(6);
+        when(planRepository.findByUserIdAndIsActiveTrue(USER_ID)).thenReturn(Optional.of(plan));
+        when(trainerRepository.findById(trainerId)).thenReturn(Optional.of(trainer));
+        when(sessionService.findStrugglingExercises(any(), any())).thenReturn(Set.of(UUID.randomUUID()));
+
+        WorkoutPlanDto result = service.getActivePlan(CURRENT_USER);
+
+        assertThat(result.deloadRecommended()).isTrue();
+    }
+
+    @Test
+    void notDeloadRecommendedWhenNeitherTimeNorStruggleTrigger() {
+        UUID trainerId = UUID.randomUUID();
+        WorkoutPlan plan = mockPlan(trainerId, Instant.now());
+        TrainerPhilosophy trainer = mockTrainer(6);
+        when(planRepository.findByUserIdAndIsActiveTrue(USER_ID)).thenReturn(Optional.of(plan));
+        when(trainerRepository.findById(trainerId)).thenReturn(Optional.of(trainer));
+        // sessionService.findStrugglingExercises defaults to Set.of() via @BeforeEach
 
         WorkoutPlanDto result = service.getActivePlan(CURRENT_USER);
 

@@ -730,3 +730,75 @@ self-service feature.
   tests (152 → 161: +1 `ExerciseControllerTest`, +3 new
   `WorkoutPlanServiceTest` cases, +3 new `TrainerRosterServiceTest` cases, +2 new
   `TrainerRosterControllerTest` cases), `tsc`/`next lint`/11 frontend tests clean.
+
+## Personalized program, part 3 of 3 — living-plan struggle detection
+
+Last of the three "kişiye özel program" features. The existing deload nudge was
+purely time-based (weeks-elapsed vs. a trainer's `deloadFrequencyWeeks`), and the
+existing in-session exercise-swap flow was fully manual. This adds a
+performance-aware signal: detect when a user is genuinely struggling with a
+specific exercise, and (a) suggest a swap for it, (b) fold it into the deload
+recommendation as a second, independent trigger.
+
+- **`WorkoutSessionService.findStrugglingExercises(userId, exerciseIds)`**: an
+  exercise "struggles" when, in **each** of the user's last 2 completed sessions
+  logging it, a majority of sets missed the bottom of what was prescribed **at
+  the time** — every `SetLog` is compared against its own
+  `SetLog.workoutExercise.repRangeMin`, never against today's active plan's
+  prescription for the same exercise. This matters because selecting a new plan
+  creates brand-new `WorkoutExercise` rows; old `SetLog`s still point at the old
+  ones. Requiring struggle in *every* one of the last 2 sessions (not just one)
+  keeps a single bad-sleep day from triggering a suggestion. Uses the same
+  `LinkedHashMap`-not-`HashMap` grouping-by-session pattern as `getPreviousSets`
+  — the exact class of bug already found and fixed there this project — since a
+  plain `HashMap` doesn't preserve the repository's DESC-by-date order.
+- **`isDeloadRecommended` gained a second, independent trigger.** Renamed the
+  existing body to `isTimeBasedDeloadDue`; the new orchestrating method is
+  `isTimeBasedDeloadDue(plan) || any exercise in the plan is struggling`. This
+  matters for trainer-built custom plans (Feature 2): they have no trainer
+  philosophy at all, so the time-based check alone would never apply to them —
+  the struggle-based trigger is the only deload signal a custom plan can ever
+  get, and it now works automatically with zero extra code in the custom-plan
+  path (confirmed by design, not just luck — `createCustomPlanForUser` already
+  calls the same `isDeloadRecommended(saved)`).
+- **New `WorkoutPlanService` → `WorkoutSessionService` dependency** — verified no
+  circular bean wiring (`WorkoutSessionService`'s own constructor deps never
+  include `WorkoutPlanService`).
+- **`WorkoutSessionDto` gained `strugglingExerciseIds`**, computed only in
+  `startSession`/`getActiveSession` (scoped to just that day's exercises) via a
+  new `from(session, strugglingIds)` overload — `logSet`/`completeSession` keep
+  using the plain `from(session)` (→ empty set), since this is a pre-session
+  hint, not something worth recomputing after every single set write.
+- **Frontend bug caught and fixed before it shipped**: naively replacing
+  `session` with whatever `api.logSet(...)` returns after logging a set would
+  have silently reset `strugglingExerciseIds` to empty (since `logSet` always
+  returns the no-arg, empty-set variant) — making the suggestion pill disappear
+  after the very first logged set in a session. Fixed by carrying the
+  session-start value forward: `setSession({ ...updated, strugglingExerciseIds:
+  session.strugglingExerciseIds })`.
+- **Reused the existing in-session swap flow, didn't build a new one.** A full
+  `SwapFlow` (reason → optional pain interstitial → alternatives) already
+  shipped earlier this project; the manual "Swap" button is untouched. A new,
+  separate "Struggling with this? See an alternative" pill (only rendered when
+  the exercise isn't already swapped) opens the same `SwapFlow` in a new
+  `suggested` mode that skips straight to the alternatives step — struggle is
+  about missed reps, not pain, so the pain-safety interstitial doesn't apply —
+  and tags the first alternative "Suggested." No persistence needed for v1: the
+  swap was already display-only pre-existing behavior (`SetLog`s always record
+  against the original `workoutExerciseId` regardless of any swap); making the
+  suggested path follow the identical contract avoids scope creep into
+  questions this feature never posed (does the `WorkoutExercise` row mutate
+  going forward, does prescription carry over).
+- Verified end-to-end against local Docker Postgres: logged 2 consecutive
+  completed sessions with reps below the prescribed `repRangeMin` on the same
+  exercise, confirmed the 3rd session's `strugglingExerciseIds` correctly
+  flagged it (empty on sessions 1 and 2, since the lookback window wasn't full
+  yet), and confirmed `GET /api/plan/active` flipped `deloadRecommended` to
+  `true` even on a freshly-selected plan (`createdAt` = now, so the time-based
+  check alone would have said no). 169/169 backend tests (161 → 169: +4 new
+  `findStrugglingExercises` unit tests including the historical-vs-current
+  rep-range regression case, +2 new session-population tests, +2 new
+  `WorkoutPlanServiceTest` cases for the OR condition), `tsc`/`next lint`/11
+  frontend tests clean.
+
+All three "kişiye özel program" increments are now complete.

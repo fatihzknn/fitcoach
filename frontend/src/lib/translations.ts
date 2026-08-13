@@ -152,6 +152,8 @@ export const tr: Record<string, string> = {
   "↑ +2.5 kg suggested": "↑ +2.5 kg önerisi",
   "Swap": "Değiştir",
   "swapped": "değiştirildi",
+  "Struggling with this? See an alternative": "Bu egzersizde zorlanıyor musun? Alternatife bak",
+  "Suggested": "Önerilen",
   "Originally:": "Orijinal:",
   "Tip:": "İpucu:",
   "View progression": "Gelişimi gör",

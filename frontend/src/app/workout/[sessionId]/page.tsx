@@ -11,6 +11,7 @@ import {
   Trophy,
   Timer,
   TrendingUp,
+  Lightbulb,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -337,8 +338,9 @@ interface ExerciseBlockProps {
   previousSets: PreviousSetDto[];
   loggedSets: Map<string, { weightKg: string; repsCompleted: string }>;
   prKeys: Set<string>;
+  isStruggling: boolean;
   onLog: (weId: string, setNum: number, weight: string, reps: string) => void;
-  onSwap: (we: WorkoutExerciseDto) => void;
+  onSwap: (we: WorkoutExerciseDto, suggested?: boolean) => void;
   onShowHistory: (exerciseId: string, exerciseName: string) => void;
   disabled: boolean;
 }
@@ -349,6 +351,7 @@ function ExerciseBlock({
   previousSets,
   loggedSets,
   prKeys,
+  isStruggling,
   onLog,
   onSwap,
   onShowHistory,
@@ -392,6 +395,15 @@ function ExerciseBlock({
             <p className="text-xs text-muted-foreground/55">
               {t("Originally:")} {we.exercise.name}
             </p>
+          )}
+          {!swappedExercise && isStruggling && (
+            <button
+              onClick={() => onSwap(we, true)}
+              className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-400 hover:bg-amber-500/25 transition-colors"
+            >
+              <Lightbulb className="h-3 w-3" />
+              {t("Struggling with this? See an alternative")}
+            </button>
           )}
         </div>
         <button
@@ -449,13 +461,18 @@ const SWAP_REASONS = [
 
 interface SwapFlowProps {
   we: WorkoutExerciseDto;
+  /** Opened from the "struggling? see an alternative" pill rather than the manual
+   *  Swap button — skip straight to the alternatives list (struggle is about missed
+   *  reps, not pain, so the pain-safety interstitial doesn't apply) and mark the
+   *  first alternative as the suggestion. */
+  suggested?: boolean;
   onConfirm: (weId: string, alternative: ExerciseDto) => void;
   onClose: () => void;
 }
 
-function SwapFlow({ we, onConfirm, onClose }: SwapFlowProps) {
+function SwapFlow({ we, suggested, onConfirm, onClose }: SwapFlowProps) {
   const { t } = useI18n();
-  const [step, setStep] = React.useState<SwapStep>("reason");
+  const [step, setStep] = React.useState<SwapStep>(suggested ? "alternatives" : "reason");
 
   function handleReason(value: string) {
     if (value === "CAUSES_PAIN") {
@@ -533,14 +550,21 @@ function SwapFlow({ we, onConfirm, onClose }: SwapFlowProps) {
               <p className="text-sm text-muted-foreground py-4 text-center">{t("No alternatives recorded yet.")}</p>
             ) : (
               <div className="space-y-2">
-                {we.exercise.alternatives.map((alt) => (
+                {we.exercise.alternatives.map((alt, i) => (
                   <button
                     key={alt.id}
                     onClick={() => onConfirm(we.id, alt)}
                     className="flex w-full items-center justify-between rounded-xl border border-border bg-elevated px-4 py-3.5 text-left hover:bg-secondary transition-colors"
                   >
                     <div>
-                      <p className="font-medium text-sm">{alt.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-medium text-sm">{alt.name}</p>
+                        {suggested && i === 0 && (
+                          <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                            {t("Suggested")}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         {t(alt.primaryMuscleGroup)} · {t(alt.difficultyLevel)}
                       </p>
@@ -613,7 +637,7 @@ export default function WorkoutSessionPage() {
   const [loggedSets, setLoggedSets] = React.useState<Map<string, { weightKg: string; repsCompleted: string }>>(new Map());
   const [swappedExercises, setSwappedExercises] = React.useState<Map<string, ExerciseDto>>(new Map());
   const [prKeys, setPrKeys] = React.useState<Set<string>>(new Set());
-  const [swapTarget, setSwapTarget] = React.useState<WorkoutExerciseDto | null>(null);
+  const [swapTarget, setSwapTarget] = React.useState<{ we: WorkoutExerciseDto; suggested: boolean } | null>(null);
   const [restTimer, setRestTimer] = React.useState<{ remaining: number; total: number; exerciseName: string } | null>(null);
   const [historyTarget, setHistoryTarget] = React.useState<{ exerciseId: string; exerciseName: string } | null>(null);
   const [historyEntries, setHistoryEntries] = React.useState<ExerciseHistoryEntryDto[]>([]);
@@ -709,7 +733,10 @@ export default function WorkoutSessionPage() {
         repsCompleted: parseInt(reps, 10),
         rirActual: null,
       });
-      setSession(updated);
+      // logSet doesn't recompute strugglingExerciseIds (it's a pre-session hint,
+      // not worth re-deriving on every set write) — carry the session-start value
+      // forward so the suggestion pill doesn't disappear after the first log.
+      setSession({ ...updated, strugglingExerciseIds: session.strugglingExerciseIds });
       setLoggedSets((prev) => {
         const next = new Map(prev);
         next.set(`${weId}:${setNum}`, { weightKg: weight, repsCompleted: reps });
@@ -819,8 +846,9 @@ export default function WorkoutSessionPage() {
                   previousSets={previousByExercise.get(we.exercise.id) ?? []}
                   loggedSets={loggedSets}
                   prKeys={prKeys}
+                  isStruggling={session.strugglingExerciseIds.includes(we.exercise.id)}
                   onLog={handleLog}
-                  onSwap={setSwapTarget}
+                  onSwap={(target, suggested) => setSwapTarget({ we: target, suggested: !!suggested })}
                   onShowHistory={openHistory}
                   disabled={saving || completing}
                 />
@@ -875,7 +903,8 @@ export default function WorkoutSessionPage() {
       {/* Swap flow */}
       {swapTarget && (
         <SwapFlow
-          we={swapTarget}
+          we={swapTarget.we}
+          suggested={swapTarget.suggested}
           onConfirm={handleSwapConfirm}
           onClose={() => setSwapTarget(null)}
         />
