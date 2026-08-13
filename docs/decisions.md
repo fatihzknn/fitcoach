@@ -802,3 +802,32 @@ recommendation as a second, independent trigger.
   frontend tests clean.
 
 All three "kişiye özel program" increments are now complete.
+
+## Controller test coverage — closing the remaining gap
+
+The last known backend test-coverage gap (flagged in the `product_roadmap` memory
+after the earlier service-layer expansion): 6 controllers had zero dedicated
+`@WebMvcTest` slice coverage even though the service layer beneath most of them was
+already tested — `ProfileController`, `WorkoutSessionController`,
+`BodyMeasurementController`, `WeeklyCheckInController`, `TrainerConnectionController`,
+`AuthController`.
+
+- All 6 new test files mirror the established slice-test scaffolding
+  (`excludeAutoConfiguration = {SecurityAutoConfiguration, SecurityFilterAutoConfiguration}`,
+  `@AutoConfigureMockMvc(addFilters = false)`, manual `SecurityContextHolder` auth,
+  `@MockBean JwtService` to satisfy `JwtAuthenticationFilter`'s dependency even though
+  the filter itself isn't invoked) — same pattern as `WorkoutControllerTest`/
+  `TrainerRosterControllerTest`/`ExerciseControllerTest`.
+- `AuthControllerTest` is the one structural outlier: `/register` and `/login` are
+  public (no `@AuthenticationPrincipal`), and `/login`'s 401 path is asserted via
+  `BadCredentialsException` — confirming `GlobalExceptionHandler`'s existing
+  `{BadCredentialsException, AuthenticationException}` handler, not new behavior.
+- Each test class covers the success path plus the validation/error paths that
+  exercise `GlobalExceptionHandler`'s mappings relevant to that controller (400 for
+  bean-validation failures, 404/403/409 where the mocked service throws
+  `NotFoundException`/`ForbiddenException`/`ConflictException`).
+- 169 → **201 backend tests**, all passing. This closes every remaining
+  controller-layer gap noted in the `product_roadmap` memory; the only backend test
+  debt left unaddressed is near-zero frontend component/page test coverage
+  (`frontend/src/**/__tests__` only covers `lib/session.ts` and `lib/utils.ts`), a
+  separate and much larger gap not in scope here.
