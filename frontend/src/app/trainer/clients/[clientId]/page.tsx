@@ -149,11 +149,16 @@ export default function TrainerClientDetailPage() {
 
       {!loading && detail && (
         <>
-          <div>
-            <h1 className="font-display text-3xl font-extrabold leading-tight tracking-tight">
-              {detail.summary.displayName}
-            </h1>
-            <p className="text-sm text-muted-foreground">{detail.summary.email}</p>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h1 className="font-display text-3xl font-extrabold leading-tight tracking-tight">
+                {detail.summary.displayName}
+              </h1>
+              <p className="text-sm text-muted-foreground">{detail.summary.email}</p>
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => router.push(`/trainer/clients/${clientId}/profile`)}>
+              {t("Edit profile")}
+            </Button>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

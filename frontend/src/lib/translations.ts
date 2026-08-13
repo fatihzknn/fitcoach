@@ -421,4 +421,21 @@ export const tr: Record<string, string> = {
   "Glutes": "Kalça",
   "Core": "Karın",
   "Calves": "Baldır",
+
+  // ─── Trainer editing client profile ────────────────────────────────────────
+  "Edit profile": "Profili düzenle",
+  "Edit client profile": "Danışan profilini düzenle",
+  "Changes take effect the next time a plan is generated for this client.":
+    "Değişiklikler bu danışan için yeni bir plan oluşturulduğunda geçerli olur.",
+  "Could not load this client's profile.": "Bu danışanın profili yüklenemedi.",
+  "Could not save changes. Please try again.": "Değişiklikler kaydedilemedi. Tekrar dene.",
+  "Choose a training background.": "Bir antrenman geçmişi seç.",
+  "Choose training days per week.": "Haftalık antrenman günü seç.",
+  "Choose a session length.": "Antrenman süresi seç.",
+  "Select a sex.": "Cinsiyet seç.",
+  "Choose a barbell comfort level.": "Barbell rahatlık düzeyi seç.",
+  "Training background": "Antrenman geçmişi",
+  "Training days per week": "Haftalık antrenman günü",
+  "Session length": "Antrenman süresi",
+  "Save changes": "Değişiklikleri kaydet",
 };

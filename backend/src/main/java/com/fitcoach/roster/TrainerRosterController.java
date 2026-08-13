@@ -1,6 +1,8 @@
 package com.fitcoach.roster;
 
 import com.fitcoach.auth.jwt.CurrentUser;
+import com.fitcoach.profile.dto.FitnessProfileDto;
+import com.fitcoach.profile.dto.OnboardingRequest;
 import com.fitcoach.roster.dto.ClientDetailDto;
 import com.fitcoach.roster.dto.ClientSummaryDto;
 import com.fitcoach.roster.dto.TrainerInviteDto;
@@ -18,6 +20,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -91,5 +94,22 @@ public class TrainerRosterController {
             @Valid @RequestBody CreateCustomPlanRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(rosterService.createCustomPlanForClient(currentUser, clientId, request));
+    }
+
+    @GetMapping("/clients/{clientId}/profile")
+    @Operation(summary = "Get a client's fitness profile (goal, days, injuries, etc.) for editing")
+    public FitnessProfileDto getClientProfile(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable UUID clientId) {
+        return rosterService.getClientProfile(currentUser, clientId);
+    }
+
+    @PutMapping("/clients/{clientId}/profile")
+    @Operation(summary = "Edit a client's fitness profile on their behalf")
+    public FitnessProfileDto updateClientProfile(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable UUID clientId,
+            @Valid @RequestBody OnboardingRequest request) {
+        return rosterService.updateClientProfile(currentUser, clientId, request);
     }
 }

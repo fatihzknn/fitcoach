@@ -901,3 +901,44 @@ implement correctly.
   and the substitute's single frozen session was completely unaffected by the
   swap-back. 201 → **209 backend tests**, `tsc`/`next lint`/11 frontend tests
   clean.
+
+## Trainer editing a client's fitness profile
+
+Last of the previously-open `product_roadmap` items: a trainer could assign or
+build plans for a client but never touch the onboarding answers driving
+generation (goal, days, injuries, barbell comfort) — only the client could edit
+those, via their own onboarding flow.
+
+- **`ProfileService` split into `CurrentUser`- and `UUID`-based method pairs**
+  (`completeOnboarding`/`completeOnboardingForUser`,
+  `getProfile`/`getProfileForUser`), the same extraction pattern already used
+  for `WorkoutPlanService`/`WeeklyCheckInService` in the trainer-portal work —
+  the `CurrentUser`-based methods now just delegate, zero behavior change
+  (confirmed by the full existing `ProfileServiceTest` suite passing unchanged).
+- **New `GET`/`PUT /api/trainer/clients/{clientId}/profile`**, same
+  `requireTrainerRole` → `requireOwnedClient` → delegate chain as every other
+  roster endpoint. The edit endpoint reuses `OnboardingRequest`/`FitnessProfileDto`
+  as-is (no new DTO) — a trainer's edit is the identical shape to a client's own
+  onboarding submission, just performed by someone else on the client's behalf,
+  and `completeOnboardingForUser` is deliberately idempotent either way (an edit
+  of an already-onboarded client just re-stamps `onboardingCompletedAt`, which is
+  harmless).
+- **Frontend**: new `/trainer/clients/[clientId]/profile` page — a single
+  scrollable form (not the client's multi-step onboarding wizard, which optimizes
+  for low-friction first-time entry; a trainer editing an existing profile wants
+  to see and change fields directly), reusing the exact same option arrays
+  (`GOAL_OPTIONS`, `BACKGROUND_OPTIONS`, etc.) and `OptionCard` component the
+  client onboarding flow already uses, pre-filled from `GET .../profile`. New
+  "Edit profile" button on the client-detail page.
+- Verified end-to-end against local Docker Postgres: trainer viewed a client's
+  onboarding-submitted profile, edited goal/days/pain-area/barbell-comfort,
+  confirmed the client's own `GET /api/profile` immediately reflects the
+  trainer's changes; confirmed a non-trainer caller gets `403` from the
+  trainer-only endpoint. 209 → **220 backend tests** (+3 `getClientProfile`
+  cases, +3 `updateClientProfile` cases in `TrainerRosterServiceTest`, +5 new
+  `TrainerRosterControllerTest` cases), `tsc`/`next lint`/11 frontend tests
+  clean.
+
+All four previously-open `product_roadmap` items are now closed: controller
+test coverage, exercise-swap persistence, trainer profile editing, and (next)
+trainer-client messaging.

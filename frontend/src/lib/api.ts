@@ -539,6 +539,16 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
+  getClientProfile: (clientId: string) =>
+    request<FitnessProfileDto>(`/api/trainer/clients/${clientId}/profile`, { auth: true }),
+
+  updateClientProfile: (clientId: string, input: OnboardingRequest) =>
+    request<FitnessProfileDto>(`/api/trainer/clients/${clientId}/profile`, {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify(input),
+    }),
+
   // ─── Trainer connections (client-facing) ──────────────────────────────────
 
   redeemInviteCode: (code: string) =>

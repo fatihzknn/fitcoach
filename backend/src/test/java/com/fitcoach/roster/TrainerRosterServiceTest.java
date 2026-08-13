@@ -8,6 +8,14 @@ import com.fitcoach.checkin.WeeklyCheckInService;
 import com.fitcoach.checkin.dto.ProgressStatsDto;
 import com.fitcoach.common.ForbiddenException;
 import com.fitcoach.common.NotFoundException;
+import com.fitcoach.profile.ProfileService;
+import com.fitcoach.profile.domain.BarbellComfort;
+import com.fitcoach.profile.domain.MainGoal;
+import com.fitcoach.profile.domain.PainArea;
+import com.fitcoach.profile.domain.Sex;
+import com.fitcoach.profile.domain.TrainingBackground;
+import com.fitcoach.profile.dto.FitnessProfileDto;
+import com.fitcoach.profile.dto.OnboardingRequest;
 import com.fitcoach.roster.dto.RedeemInviteRequest;
 import com.fitcoach.roster.dto.TrainerInviteDto;
 import com.fitcoach.workout.WorkoutPlanRepository;
@@ -28,6 +36,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,6 +57,7 @@ class TrainerRosterServiceTest {
     @Mock private WorkoutPlanRepository planRepository;
     @Mock private WorkoutPlanService planService;
     @Mock private WeeklyCheckInService checkInService;
+    @Mock private ProfileService profileService;
 
     @InjectMocks
     private TrainerRosterService service;
@@ -260,6 +270,66 @@ class TrainerRosterServiceTest {
     @Test
     void createCustomPlanForClient_nonTrainerCaller_throwsForbidden() {
         assertThatThrownBy(() -> service.createCustomPlanForClient(CLIENT, CLIENT_ID, customPlanRequest()))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    // ─── client profile editing ─────────────────────────────────────────────────
+
+    private OnboardingRequest profileEditRequest() {
+        return new OnboardingRequest(MainGoal.STRENGTH, TrainingBackground.REGULAR, 5, 75,
+                30, 180, 82.0, Sex.MALE, Set.of(PainArea.KNEE), BarbellComfort.PREFER_ALTERNATIVES);
+    }
+
+    @Test
+    void getClientProfile_passesClientIdNotTrainerId() {
+        TrainerClient link = new TrainerClient(TRAINER_ID, CLIENT_ID);
+        when(trainerClientRepository.findByTrainerIdAndClientId(TRAINER_ID, CLIENT_ID))
+                .thenReturn(Optional.of(link));
+
+        service.getClientProfile(TRAINER, CLIENT_ID);
+
+        verify(profileService).getProfileForUser(eq(CLIENT_ID));
+    }
+
+    @Test
+    void getClientProfile_unownedClient_throwsNotFound() {
+        when(trainerClientRepository.findByTrainerIdAndClientId(TRAINER_ID, CLIENT_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getClientProfile(TRAINER, CLIENT_ID))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void getClientProfile_nonTrainerCaller_throwsForbidden() {
+        assertThatThrownBy(() -> service.getClientProfile(CLIENT, CLIENT_ID))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void updateClientProfile_passesClientIdNotTrainerId() {
+        TrainerClient link = new TrainerClient(TRAINER_ID, CLIENT_ID);
+        when(trainerClientRepository.findByTrainerIdAndClientId(TRAINER_ID, CLIENT_ID))
+                .thenReturn(Optional.of(link));
+        OnboardingRequest request = profileEditRequest();
+
+        service.updateClientProfile(TRAINER, CLIENT_ID, request);
+
+        verify(profileService).completeOnboardingForUser(eq(CLIENT_ID), eq(request));
+    }
+
+    @Test
+    void updateClientProfile_unownedClient_throwsNotFound() {
+        when(trainerClientRepository.findByTrainerIdAndClientId(TRAINER_ID, CLIENT_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updateClientProfile(TRAINER, CLIENT_ID, profileEditRequest()))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void updateClientProfile_nonTrainerCaller_throwsForbidden() {
+        assertThatThrownBy(() -> service.updateClientProfile(CLIENT, CLIENT_ID, profileEditRequest()))
                 .isInstanceOf(ForbiddenException.class);
     }
 

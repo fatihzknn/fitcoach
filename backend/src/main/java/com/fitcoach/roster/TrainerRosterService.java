@@ -8,6 +8,9 @@ import com.fitcoach.checkin.WeeklyCheckInService;
 import com.fitcoach.checkin.dto.ProgressStatsDto;
 import com.fitcoach.common.ForbiddenException;
 import com.fitcoach.common.NotFoundException;
+import com.fitcoach.profile.ProfileService;
+import com.fitcoach.profile.dto.FitnessProfileDto;
+import com.fitcoach.profile.dto.OnboardingRequest;
 import com.fitcoach.roster.dto.ClientDetailDto;
 import com.fitcoach.roster.dto.ClientSummaryDto;
 import com.fitcoach.roster.dto.RedeemInviteRequest;
@@ -41,6 +44,7 @@ public class TrainerRosterService {
     private final WorkoutPlanRepository planRepository;
     private final WorkoutPlanService planService;
     private final WeeklyCheckInService checkInService;
+    private final ProfileService profileService;
     private final SecureRandom random = new SecureRandom();
 
     public TrainerRosterService(TrainerInviteRepository inviteRepository,
@@ -48,13 +52,15 @@ public class TrainerRosterService {
                                  UserRepository userRepository,
                                  WorkoutPlanRepository planRepository,
                                  WorkoutPlanService planService,
-                                 WeeklyCheckInService checkInService) {
+                                 WeeklyCheckInService checkInService,
+                                 ProfileService profileService) {
         this.inviteRepository = inviteRepository;
         this.trainerClientRepository = trainerClientRepository;
         this.userRepository = userRepository;
         this.planRepository = planRepository;
         this.planService = planService;
         this.checkInService = checkInService;
+        this.profileService = profileService;
     }
 
     @Transactional
@@ -133,6 +139,20 @@ public class TrainerRosterService {
         requireTrainerRole(trainer);
         requireOwnedClient(trainer.id(), clientId);
         return planService.createCustomPlanForUser(clientId, request);
+    }
+
+    @Transactional(readOnly = true)
+    public FitnessProfileDto getClientProfile(CurrentUser trainer, UUID clientId) {
+        requireTrainerRole(trainer);
+        requireOwnedClient(trainer.id(), clientId);
+        return profileService.getProfileForUser(clientId);
+    }
+
+    @Transactional
+    public FitnessProfileDto updateClientProfile(CurrentUser trainer, UUID clientId, OnboardingRequest request) {
+        requireTrainerRole(trainer);
+        requireOwnedClient(trainer.id(), clientId);
+        return profileService.completeOnboardingForUser(clientId, request);
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.EnumSet;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class ProfileService {
@@ -26,8 +27,19 @@ public class ProfileService {
      */
     @Transactional
     public FitnessProfileDto completeOnboarding(CurrentUser currentUser, OnboardingRequest req) {
-        FitnessProfile profile = profileRepository.findByUserId(currentUser.id())
-                .orElseGet(() -> new FitnessProfile(currentUser.id()));
+        return completeOnboardingForUser(currentUser.id(), req);
+    }
+
+    /** Same as completeOnboarding, but for an explicit user — used by the trainer
+     *  portal to edit a client's profile, after ownership has already been verified.
+     *  Still stamps onboardingCompletedAt even on an edit of an already-onboarded
+     *  client — harmless (it's already set) and keeps this one code path for both
+     *  "first submission" and "trainer edit" instead of branching on which case
+     *  this is. */
+    @Transactional
+    public FitnessProfileDto completeOnboardingForUser(UUID userId, OnboardingRequest req) {
+        FitnessProfile profile = profileRepository.findByUserId(userId)
+                .orElseGet(() -> new FitnessProfile(userId));
 
         profile.setMainGoal(req.mainGoal());
         profile.setTrainingBackground(req.trainingBackground());
@@ -47,7 +59,15 @@ public class ProfileService {
 
     @Transactional(readOnly = true)
     public FitnessProfileDto getProfile(CurrentUser currentUser) {
-        return profileRepository.findByUserId(currentUser.id())
+        return getProfileForUser(currentUser.id());
+    }
+
+    /** Same as getProfile, but for an explicit user — used by the trainer portal to
+     *  show/prefill a client's profile before editing, after ownership has already
+     *  been verified. */
+    @Transactional(readOnly = true)
+    public FitnessProfileDto getProfileForUser(UUID userId) {
+        return profileRepository.findByUserId(userId)
                 .map(FitnessProfileDto::from)
                 .orElseThrow(() -> new NotFoundException("No fitness profile yet. Complete onboarding first."));
     }
