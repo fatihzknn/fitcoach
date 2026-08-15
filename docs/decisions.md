@@ -939,6 +939,65 @@ those, via their own onboarding flow.
   `TrainerRosterControllerTest` cases), `tsc`/`next lint`/11 frontend tests
   clean.
 
-All four previously-open `product_roadmap` items are now closed: controller
-test coverage, exercise-swap persistence, trainer profile editing, and (next)
-trainer-client messaging.
+## Trainer-client messaging
+
+Last of the four previously-open `product_roadmap` items: a trainer and their
+client had no way to message each other — a trainer could edit a client's
+profile and assign plans, but not send them a note, and a client couldn't ask
+a question. Building this surfaced a smaller, previously-invisible gap: a
+client had **no endpoint at all** to see who their own trainer(s) are (only
+the reverse existed — a trainer's client list). Closed that first, since
+messaging is unreachable from the client side without it.
+
+- **New `trainer_messages` table (`V18`)**, anchored on the existing
+  `trainer_clients` link rather than a separate `Conversation` entity — one
+  redeemed link already is uniquely keyed per (trainer, client) pair, so it
+  doubles as the thread. Also added `trainer_clients(client_id)` as a plain
+  index in the same migration: the table only had `UNIQUE(trainer_id,
+  client_id)` (leading column `trainer_id`), so the new "find all links for
+  this client" query had no efficient path before this.
+- **New `TrainerMessageService`** (pure domain service, no `CurrentUser`, no
+  role/ownership checks) delegates to from **five new `TrainerRosterService`
+  methods** — trainer-side (`sendMessageToClient`/`getMessagesWithClient`) and
+  client-side (`listMyTrainers`/`sendMessageToTrainer`/`getMessagesWithTrainer`).
+  Deliberately **not** one generic bidirectional resolver: every other method
+  in this service is a separate trainer-side/client-side pair, each already
+  knowing which side of the link it owns (mirrors `redeemInviteCode`'s
+  existing `Role.TRAINER` guard), so messaging follows the same shape instead
+  of introducing a new pattern.
+- **`TrainerMessageDto.fromCurrentUser`** is computed server-side
+  (`senderId.equals(callerId)`) rather than exposing `senderId` — the frontend
+  never decodes its own user id from the JWT today, and this avoids adding
+  that machinery just for message-bubble alignment.
+- **New client-side polling** (`frontend/src/components/message-thread.tsx`,
+  shared by both the trainer-side and client-side thread pages): every other
+  data fetch in this app is one-shot-on-mount, because the AI coach's reply
+  arrives synchronously in the same request. Real human-to-human messaging
+  needs the receiving party to see replies without reopening the page, so
+  both thread pages poll history every 6s while the tab is visible
+  (`document.visibilityState` pauses it in the background). Guarded against
+  out-of-order responses on a slow connection with an incrementing
+  request-id ref (a send bumps it too, so a poll in flight when a message is
+  sent can't clobber the optimistic bubble), and messages are always merged
+  by `id` rather than replacing the list wholesale, so a poll landing mid-send
+  can't duplicate the just-sent message.
+- **`middleware.ts`** needed a real fix, not just new pages: the new
+  client-facing `/messages` routes were initially unprotected (missing from
+  `CLIENT_ROUTES`, the guard block, and the matcher config) — caught by
+  curling the route directly during verification (200 instead of the expected
+  redirect-to-login) before it shipped.
+- **New `TrainerConnectionControllerTest`** — this controller had **zero**
+  controller-slice tests before this change, unlike its sibling
+  `TrainerRosterController`; closed while the file was touched anyway.
+- Verified end-to-end against local Docker Postgres via the real HTTP
+  contract (registered a trainer + client, redeemed an invite, confirmed
+  `GET /api/trainer-connections` goes from `[]` to listing the trainer only
+  after redemption, exchanged messages in both directions and confirmed
+  `fromCurrentUser` flips correctly per viewer, confirmed thread ordering,
+  confirmed a trainer hitting the client-only `/api/trainer-connections` gets
+  `403`, confirmed a trainer messaging an unowned random client id gets `404`).
+  220 → **240 backend tests**, `tsc`/`next lint`/11 frontend tests clean.
+
+All four `product_roadmap` items are now closed: controller test coverage,
+exercise-swap persistence, trainer profile editing, and trainer-client
+messaging.

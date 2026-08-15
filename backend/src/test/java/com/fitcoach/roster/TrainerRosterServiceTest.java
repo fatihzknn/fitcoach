@@ -17,6 +17,8 @@ import com.fitcoach.profile.domain.TrainingBackground;
 import com.fitcoach.profile.dto.FitnessProfileDto;
 import com.fitcoach.profile.dto.OnboardingRequest;
 import com.fitcoach.roster.dto.RedeemInviteRequest;
+import com.fitcoach.roster.dto.SendTrainerMessageRequest;
+import com.fitcoach.roster.dto.TrainerConnectionSummaryDto;
 import com.fitcoach.roster.dto.TrainerInviteDto;
 import com.fitcoach.workout.WorkoutPlanRepository;
 import com.fitcoach.workout.WorkoutPlanService;
@@ -58,6 +60,7 @@ class TrainerRosterServiceTest {
     @Mock private WorkoutPlanService planService;
     @Mock private WeeklyCheckInService checkInService;
     @Mock private ProfileService profileService;
+    @Mock private TrainerMessageService messageService;
 
     @InjectMocks
     private TrainerRosterService service;
@@ -352,5 +355,93 @@ class TrainerRosterServiceTest {
         assertThat(result.get(0).displayName()).isEqualTo("Jamie");
         assertThat(result.get(0).adherenceRate4Weeks()).isEqualTo(75);
         assertThat(result.get(0).activePlanName()).isNull();
+    }
+
+    // ─── messaging ──────────────────────────────────────────────────────────────
+
+    @Test
+    void sendMessageToClient_delegatesWithTrainerAsSender() {
+        TrainerClient link = new TrainerClient(TRAINER_ID, CLIENT_ID);
+        when(trainerClientRepository.findByTrainerIdAndClientId(TRAINER_ID, CLIENT_ID))
+                .thenReturn(Optional.of(link));
+        SendTrainerMessageRequest request = new SendTrainerMessageRequest("Nice work today!");
+
+        service.sendMessageToClient(TRAINER, CLIENT_ID, request);
+
+        verify(messageService).sendMessage(eq(link), eq(TRAINER_ID), eq("Nice work today!"));
+    }
+
+    @Test
+    void sendMessageToClient_unownedClient_throwsNotFound() {
+        when(trainerClientRepository.findByTrainerIdAndClientId(TRAINER_ID, CLIENT_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.sendMessageToClient(TRAINER, CLIENT_ID, new SendTrainerMessageRequest("hi")))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void sendMessageToClient_nonTrainerCaller_throwsForbidden() {
+        assertThatThrownBy(() -> service.sendMessageToClient(CLIENT, CLIENT_ID, new SendTrainerMessageRequest("hi")))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void getMessagesWithClient_unownedClient_throwsNotFound() {
+        when(trainerClientRepository.findByTrainerIdAndClientId(TRAINER_ID, CLIENT_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getMessagesWithClient(TRAINER, CLIENT_ID))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void listMyTrainers_returnsLinkedTrainerSummaries() {
+        TrainerClient link = new TrainerClient(TRAINER_ID, CLIENT_ID);
+        User trainerUser = mock(User.class);
+        when(trainerUser.getId()).thenReturn(TRAINER_ID);
+        when(trainerUser.getDisplayName()).thenReturn("Coach Sam");
+        when(trainerUser.getEmail()).thenReturn("coach@example.com");
+        when(trainerClientRepository.findAllByClientId(CLIENT_ID)).thenReturn(List.of(link));
+        when(userRepository.findById(TRAINER_ID)).thenReturn(Optional.of(trainerUser));
+
+        List<TrainerConnectionSummaryDto> result = service.listMyTrainers(CLIENT);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).displayName()).isEqualTo("Coach Sam");
+        assertThat(result.get(0).trainerId()).isEqualTo(TRAINER_ID);
+    }
+
+    @Test
+    void listMyTrainers_trainerRoleCaller_throwsForbidden() {
+        assertThatThrownBy(() -> service.listMyTrainers(TRAINER))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void sendMessageToTrainer_unlinkedTrainer_throwsNotFound() {
+        when(trainerClientRepository.findByTrainerIdAndClientId(TRAINER_ID, CLIENT_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.sendMessageToTrainer(CLIENT, TRAINER_ID, new SendTrainerMessageRequest("hi")))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void sendMessageToTrainer_trainerRoleCaller_throwsForbidden() {
+        assertThatThrownBy(() -> service.sendMessageToTrainer(TRAINER, TRAINER_ID, new SendTrainerMessageRequest("hi")))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void getMessagesWithTrainer_delegatesWithClientAsSender() {
+        TrainerClient link = new TrainerClient(TRAINER_ID, CLIENT_ID);
+        when(trainerClientRepository.findByTrainerIdAndClientId(TRAINER_ID, CLIENT_ID))
+                .thenReturn(Optional.of(link));
+        when(messageService.getHistory(link, CLIENT_ID)).thenReturn(List.of());
+
+        service.getMessagesWithTrainer(CLIENT, TRAINER_ID);
+
+        verify(messageService).getHistory(eq(link), eq(CLIENT_ID));
     }
 }

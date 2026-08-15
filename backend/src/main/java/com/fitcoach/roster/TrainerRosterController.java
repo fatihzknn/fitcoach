@@ -5,7 +5,9 @@ import com.fitcoach.profile.dto.FitnessProfileDto;
 import com.fitcoach.profile.dto.OnboardingRequest;
 import com.fitcoach.roster.dto.ClientDetailDto;
 import com.fitcoach.roster.dto.ClientSummaryDto;
+import com.fitcoach.roster.dto.SendTrainerMessageRequest;
 import com.fitcoach.roster.dto.TrainerInviteDto;
+import com.fitcoach.roster.dto.TrainerMessageDto;
 import com.fitcoach.workout.dto.CreateCustomPlanRequest;
 import com.fitcoach.workout.dto.PlanOptionsResponse;
 import com.fitcoach.workout.dto.SelectPlanRequest;
@@ -111,5 +113,22 @@ public class TrainerRosterController {
             @PathVariable UUID clientId,
             @Valid @RequestBody OnboardingRequest request) {
         return rosterService.updateClientProfile(currentUser, clientId, request);
+    }
+
+    @GetMapping("/clients/{clientId}/messages")
+    @Operation(summary = "Get the message thread with a client")
+    public List<TrainerMessageDto> getClientMessages(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable UUID clientId) {
+        return rosterService.getMessagesWithClient(currentUser, clientId);
+    }
+
+    @PostMapping("/clients/{clientId}/messages")
+    @Operation(summary = "Send a message to a client")
+    public TrainerMessageDto sendClientMessage(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable UUID clientId,
+            @Valid @RequestBody SendTrainerMessageRequest request) {
+        return rosterService.sendMessageToClient(currentUser, clientId, request);
     }
 }

@@ -14,7 +14,10 @@ import com.fitcoach.profile.dto.OnboardingRequest;
 import com.fitcoach.roster.dto.ClientDetailDto;
 import com.fitcoach.roster.dto.ClientSummaryDto;
 import com.fitcoach.roster.dto.RedeemInviteRequest;
+import com.fitcoach.roster.dto.SendTrainerMessageRequest;
+import com.fitcoach.roster.dto.TrainerConnectionSummaryDto;
 import com.fitcoach.roster.dto.TrainerInviteDto;
+import com.fitcoach.roster.dto.TrainerMessageDto;
 import com.fitcoach.workout.WorkoutPlanRepository;
 import com.fitcoach.workout.WorkoutPlanService;
 import com.fitcoach.workout.dto.CreateCustomPlanRequest;
@@ -45,6 +48,7 @@ public class TrainerRosterService {
     private final WorkoutPlanService planService;
     private final WeeklyCheckInService checkInService;
     private final ProfileService profileService;
+    private final TrainerMessageService messageService;
     private final SecureRandom random = new SecureRandom();
 
     public TrainerRosterService(TrainerInviteRepository inviteRepository,
@@ -53,7 +57,8 @@ public class TrainerRosterService {
                                  WorkoutPlanRepository planRepository,
                                  WorkoutPlanService planService,
                                  WeeklyCheckInService checkInService,
-                                 ProfileService profileService) {
+                                 ProfileService profileService,
+                                 TrainerMessageService messageService) {
         this.inviteRepository = inviteRepository;
         this.trainerClientRepository = trainerClientRepository;
         this.userRepository = userRepository;
@@ -61,6 +66,7 @@ public class TrainerRosterService {
         this.planService = planService;
         this.checkInService = checkInService;
         this.profileService = profileService;
+        this.messageService = messageService;
     }
 
     @Transactional
@@ -155,6 +161,42 @@ public class TrainerRosterService {
         return profileService.completeOnboardingForUser(clientId, request);
     }
 
+    @Transactional
+    public TrainerMessageDto sendMessageToClient(CurrentUser trainer, UUID clientId, SendTrainerMessageRequest request) {
+        requireTrainerRole(trainer);
+        TrainerClient link = requireOwnedClient(trainer.id(), clientId);
+        return messageService.sendMessage(link, trainer.id(), request.content());
+    }
+
+    @Transactional(readOnly = true)
+    public List<TrainerMessageDto> getMessagesWithClient(CurrentUser trainer, UUID clientId) {
+        requireTrainerRole(trainer);
+        TrainerClient link = requireOwnedClient(trainer.id(), clientId);
+        return messageService.getHistory(link, trainer.id());
+    }
+
+    @Transactional(readOnly = true)
+    public List<TrainerConnectionSummaryDto> listMyTrainers(CurrentUser client) {
+        requireClientRole(client);
+        return trainerClientRepository.findAllByClientId(client.id()).stream()
+                .map(this::toConnectionSummary)
+                .toList();
+    }
+
+    @Transactional
+    public TrainerMessageDto sendMessageToTrainer(CurrentUser client, UUID trainerId, SendTrainerMessageRequest request) {
+        requireClientRole(client);
+        TrainerClient link = requireLinkedTrainer(trainerId, client.id());
+        return messageService.sendMessage(link, client.id(), request.content());
+    }
+
+    @Transactional(readOnly = true)
+    public List<TrainerMessageDto> getMessagesWithTrainer(CurrentUser client, UUID trainerId) {
+        requireClientRole(client);
+        TrainerClient link = requireLinkedTrainer(trainerId, client.id());
+        return messageService.getHistory(link, client.id());
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private ClientSummaryDto toSummary(TrainerClient link) {
@@ -181,12 +223,31 @@ public class TrainerRosterService {
         }
     }
 
+    /** Mirrors redeemInviteCode's existing guard — a trainer account has no trainer of its own. */
+    private void requireClientRole(CurrentUser user) {
+        if (user.role() == Role.TRAINER) {
+            throw new ForbiddenException("Trainer accounts don't have their own trainer connections.");
+        }
+    }
+
     /** Ownership check, not a role check — matches WorkoutSessionService.requireOwnedSession's
      *  pattern exactly (404, not 403, so a trainer can't distinguish "not your client" from
      *  "doesn't exist" by probing UUIDs). */
     private TrainerClient requireOwnedClient(UUID trainerId, UUID clientId) {
         return trainerClientRepository.findByTrainerIdAndClientId(trainerId, clientId)
                 .orElseThrow(() -> new NotFoundException("Client not found."));
+    }
+
+    /** Same lookup, reversed perspective — a client resolving a link to one of their trainers. */
+    private TrainerClient requireLinkedTrainer(UUID trainerId, UUID clientId) {
+        return trainerClientRepository.findByTrainerIdAndClientId(trainerId, clientId)
+                .orElseThrow(() -> new NotFoundException("Trainer not found."));
+    }
+
+    private TrainerConnectionSummaryDto toConnectionSummary(TrainerClient link) {
+        User trainer = userRepository.findById(link.getTrainerId())
+                .orElseThrow(() -> new NotFoundException("Trainer not found."));
+        return new TrainerConnectionSummaryDto(trainer.getId(), trainer.getDisplayName(), trainer.getEmail(), link.getCreatedAt());
     }
 
     private Instant newExpiry() {

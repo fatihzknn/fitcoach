@@ -7,6 +7,9 @@ import com.fitcoach.auth.jwt.JwtService;
 import com.fitcoach.common.ForbiddenException;
 import com.fitcoach.common.NotFoundException;
 import com.fitcoach.roster.dto.RedeemInviteRequest;
+import com.fitcoach.roster.dto.SendTrainerMessageRequest;
+import com.fitcoach.roster.dto.TrainerConnectionSummaryDto;
+import com.fitcoach.roster.dto.TrainerMessageDto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,13 +23,17 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(value = TrainerConnectionController.class,
@@ -39,13 +46,13 @@ class TrainerConnectionControllerTest {
     @MockBean TrainerRosterService rosterService;
     @MockBean JwtService jwtService;
 
-    private static final UUID USER_ID = UUID.randomUUID();
-    private static final CurrentUser CURRENT_USER = new CurrentUser(USER_ID, "client@example.com", Role.USER);
+    private static final UUID CLIENT_ID = UUID.randomUUID();
+    private static final CurrentUser CLIENT = new CurrentUser(CLIENT_ID, "client@example.com", Role.USER);
 
     @BeforeEach
     void setUpSecurityContext() {
         SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(CURRENT_USER, null, List.of())
+                new UsernamePasswordAuthenticationToken(CLIENT, null, List.of())
         );
     }
 
@@ -87,5 +94,58 @@ class TrainerConnectionControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new RedeemInviteRequest("ABCD2345"))))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void listMyTrainers_returns200WithList() throws Exception {
+        TrainerConnectionSummaryDto trainer = new TrainerConnectionSummaryDto(
+                UUID.randomUUID(), "Coach Sam", "coach@example.com", Instant.now());
+        when(rosterService.listMyTrainers(any())).thenReturn(List.of(trainer));
+
+        mockMvc.perform(get("/api/trainer-connections"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].displayName").value("Coach Sam"));
+    }
+
+    @Test
+    void getMessages_returns200() throws Exception {
+        TrainerMessageDto message = new TrainerMessageDto(UUID.randomUUID(), "Hi coach", Instant.now(), true);
+        when(rosterService.getMessagesWithTrainer(any(), any())).thenReturn(List.of(message));
+
+        mockMvc.perform(get("/api/trainer-connections/" + UUID.randomUUID() + "/messages"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].content").value("Hi coach"));
+    }
+
+    @Test
+    void sendMessage_returns200WithDto() throws Exception {
+        TrainerMessageDto saved = new TrainerMessageDto(UUID.randomUUID(), "Question about my plan", Instant.now(), true);
+        when(rosterService.sendMessageToTrainer(any(), any(), any())).thenReturn(saved);
+
+        mockMvc.perform(post("/api/trainer-connections/" + UUID.randomUUID() + "/messages")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new SendTrainerMessageRequest("Question about my plan"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").value("Question about my plan"));
+    }
+
+    @Test
+    void sendMessage_returns403ForTrainerRoleCaller() throws Exception {
+        when(rosterService.sendMessageToTrainer(any(), any(), any()))
+                .thenThrow(new ForbiddenException("Trainer accounts don't have their own trainer connections."));
+
+        mockMvc.perform(post("/api/trainer-connections/" + UUID.randomUUID() + "/messages")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new SendTrainerMessageRequest("hi"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void getMessages_returns404ForUnlinkedTrainer() throws Exception {
+        when(rosterService.getMessagesWithTrainer(any(), any()))
+                .thenThrow(new NotFoundException("Trainer not found."));
+
+        mockMvc.perform(get("/api/trainer-connections/" + UUID.randomUUID() + "/messages"))
+                .andExpect(status().isNotFound());
     }
 }

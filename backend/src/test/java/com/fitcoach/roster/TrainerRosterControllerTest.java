@@ -14,7 +14,9 @@ import com.fitcoach.profile.domain.TrainingBackground;
 import com.fitcoach.profile.dto.FitnessProfileDto;
 import com.fitcoach.profile.dto.OnboardingRequest;
 import com.fitcoach.roster.dto.ClientSummaryDto;
+import com.fitcoach.roster.dto.SendTrainerMessageRequest;
 import com.fitcoach.roster.dto.TrainerInviteDto;
+import com.fitcoach.roster.dto.TrainerMessageDto;
 import com.fitcoach.workout.dto.CreateCustomPlanRequest;
 import com.fitcoach.workout.dto.CustomPlanDayRequest;
 import com.fitcoach.workout.dto.CustomPlanExerciseRequest;
@@ -201,5 +203,36 @@ class TrainerRosterControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(profileEditRequest())))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getClientMessages_returns200() throws Exception {
+        TrainerMessageDto message = new TrainerMessageDto(UUID.randomUUID(), "Hey!", Instant.now(), true);
+        when(rosterService.getMessagesWithClient(any(), any())).thenReturn(List.of(message));
+
+        mockMvc.perform(get("/api/trainer/clients/" + UUID.randomUUID() + "/messages"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].content").value("Hey!"));
+    }
+
+    @Test
+    void getClientMessages_returns404ForUnownedClient() throws Exception {
+        when(rosterService.getMessagesWithClient(any(), any()))
+                .thenThrow(new NotFoundException("Client not found."));
+
+        mockMvc.perform(get("/api/trainer/clients/" + UUID.randomUUID() + "/messages"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void sendClientMessage_returns200WithDto() throws Exception {
+        TrainerMessageDto saved = new TrainerMessageDto(UUID.randomUUID(), "Great job!", Instant.now(), true);
+        when(rosterService.sendMessageToClient(any(), any(), any())).thenReturn(saved);
+
+        mockMvc.perform(post("/api/trainer/clients/" + UUID.randomUUID() + "/messages")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new SendTrainerMessageRequest("Great job!"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").value("Great job!"));
     }
 }

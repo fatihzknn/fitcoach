@@ -365,6 +365,20 @@ export interface ClientDetailDto {
   activePlan: WorkoutPlanDto | null;
 }
 
+export interface TrainerMessageDto {
+  id: string;
+  content: string;
+  createdAt: string;
+  fromCurrentUser: boolean;
+}
+
+export interface TrainerConnectionSummaryDto {
+  trainerId: string;
+  displayName: string;
+  email: string;
+  linkedAt: string;
+}
+
 export const api = {
   baseUrl: API_BASE_URL,
   health: () => request<HealthResponse>("/api/health"),
@@ -549,6 +563,16 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
+  getTrainerClientMessages: (clientId: string) =>
+    request<TrainerMessageDto[]>(`/api/trainer/clients/${clientId}/messages`, { auth: true }),
+
+  sendTrainerClientMessage: (clientId: string, content: string) =>
+    request<TrainerMessageDto>(`/api/trainer/clients/${clientId}/messages`, {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify({ content }),
+    }),
+
   // ─── Trainer connections (client-facing) ──────────────────────────────────
 
   redeemInviteCode: (code: string) =>
@@ -556,5 +580,18 @@ export const api = {
       method: "POST",
       auth: true,
       body: JSON.stringify({ code }),
+    }),
+
+  getMyTrainers: () =>
+    request<TrainerConnectionSummaryDto[]>("/api/trainer-connections", { auth: true }),
+
+  getMessagesWithTrainer: (trainerId: string) =>
+    request<TrainerMessageDto[]>(`/api/trainer-connections/${trainerId}/messages`, { auth: true }),
+
+  sendMessageToTrainer: (trainerId: string, content: string) =>
+    request<TrainerMessageDto>(`/api/trainer-connections/${trainerId}/messages`, {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify({ content }),
     }),
 };

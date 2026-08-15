@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarDays, LineChart, MessageSquareText, LogOut, Link2 } from "lucide-react";
+import { CalendarDays, LineChart, MessageSquareText, MessagesSquare, LogOut, Link2 } from "lucide-react";
 import { Wordmark } from "@/components/wordmark";
 import { session } from "@/lib/session";
 import { useI18n, LangToggle } from "@/lib/i18n";
@@ -13,6 +13,7 @@ const NAV = [
   { href: "/today", label: "Today", icon: CalendarDays },
   { href: "/progress", label: "Progress", icon: LineChart },
   { href: "/coach", label: "Coach", icon: MessageSquareText },
+  { href: "/messages", label: "Messages", icon: MessagesSquare },
 ] as const;
 
 /**

@@ -30,6 +30,7 @@ const CLIENT_ROUTES = [
   "/check-in",
   "/coach",
   "/measurements",
+  "/messages",
 ];
 
 export function middleware(req: NextRequest) {
@@ -69,7 +70,8 @@ export function middleware(req: NextRequest) {
     pathname.startsWith("/progress") ||
     pathname.startsWith("/check-in") ||
     pathname.startsWith("/coach") ||
-    pathname.startsWith("/measurements")
+    pathname.startsWith("/measurements") ||
+    pathname.startsWith("/messages")
   ) {
     if (!isAuthed) return redirect("/login");
     if (!isOnboarded) return redirect("/onboarding");
@@ -111,6 +113,8 @@ export const config = {
     "/check-in",
     "/coach",
     "/measurements",
+    "/messages",
+    "/messages/:path*",
     "/login",
     "/register",
     "/onboarding",

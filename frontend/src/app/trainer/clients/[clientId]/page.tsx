@@ -156,9 +156,14 @@ export default function TrainerClientDetailPage() {
               </h1>
               <p className="text-sm text-muted-foreground">{detail.summary.email}</p>
             </div>
-            <Button size="sm" variant="secondary" onClick={() => router.push(`/trainer/clients/${clientId}/profile`)}>
-              {t("Edit profile")}
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="secondary" onClick={() => router.push(`/trainer/clients/${clientId}/messages`)}>
+                {t("Messages")}
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => router.push(`/trainer/clients/${clientId}/profile`)}>
+                {t("Edit profile")}
+              </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

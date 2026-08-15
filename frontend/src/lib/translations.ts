@@ -438,4 +438,12 @@ export const tr: Record<string, string> = {
   "Training days per week": "Haftalık antrenman günü",
   "Session length": "Antrenman süresi",
   "Save changes": "Değişiklikleri kaydet",
+
+  // ─── Trainer-client messaging ───────────────────────────────────────────────
+  "Messages": "Mesajlar",
+  "Type a message…": "Bir mesaj yaz…",
+  "No messages yet. Say hello!": "Henüz mesaj yok. Merhaba de!",
+  "Could not load your trainers.": "Antrenörlerin yüklenemedi.",
+  "You're not linked to a trainer yet. Link one to start messaging.":
+    "Henüz bir antrenöre bağlı değilsin. Mesajlaşmaya başlamak için birini bağla.",
 };
