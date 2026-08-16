@@ -24,8 +24,12 @@ import com.fitcoach.workout.dto.CreateCustomPlanRequest;
 import com.fitcoach.workout.dto.PlanOptionsResponse;
 import com.fitcoach.workout.dto.SelectPlanRequest;
 import com.fitcoach.workout.dto.WorkoutPlanDto;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.security.SecureRandom;
 import java.time.Instant;
@@ -49,6 +53,7 @@ public class TrainerRosterService {
     private final WeeklyCheckInService checkInService;
     private final ProfileService profileService;
     private final TrainerMessageService messageService;
+    private final TransactionTemplate requiresNewTransaction;
     private final SecureRandom random = new SecureRandom();
 
     public TrainerRosterService(TrainerInviteRepository inviteRepository,
@@ -58,7 +63,8 @@ public class TrainerRosterService {
                                  WorkoutPlanService planService,
                                  WeeklyCheckInService checkInService,
                                  ProfileService profileService,
-                                 TrainerMessageService messageService) {
+                                 TrainerMessageService messageService,
+                                 PlatformTransactionManager transactionManager) {
         this.inviteRepository = inviteRepository;
         this.trainerClientRepository = trainerClientRepository;
         this.userRepository = userRepository;
@@ -67,20 +73,39 @@ public class TrainerRosterService {
         this.checkInService = checkInService;
         this.profileService = profileService;
         this.messageService = messageService;
+        this.requiresNewTransaction = new TransactionTemplate(transactionManager);
+        this.requiresNewTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Transactional
     public TrainerInviteDto getOrCreateInviteCode(CurrentUser trainer) {
         requireTrainerRole(trainer);
         TrainerInvite invite = inviteRepository.findByTrainerId(trainer.id())
-                .orElseGet(() -> inviteRepository.save(
-                        new TrainerInvite(trainer.id(), generateUniqueCode(), newExpiry())));
+                .orElseGet(() -> createInviteRaceSafe(trainer.id()));
 
         if (invite.isExpired(Instant.now())) {
             invite.rotate(generateUniqueCode(), newExpiry());
             invite = inviteRepository.save(invite);
         }
         return TrainerInviteDto.from(invite);
+    }
+
+    /**
+     * Two concurrent first-time requests (e.g. React StrictMode's double effect
+     * invocation in dev, or a client retry) can both see "no invite yet" and both
+     * try to insert one, tripping uq_trainer_invites_trainer. Postgres aborts the
+     * whole transaction on a constraint violation, so the losing insert must run
+     * in its own REQUIRES_NEW transaction — that way only the failed insert rolls
+     * back, and the caller's still-healthy outer transaction can just read the
+     * row the winner created.
+     */
+    private TrainerInvite createInviteRaceSafe(UUID trainerId) {
+        try {
+            return requiresNewTransaction.execute(status ->
+                    inviteRepository.saveAndFlush(new TrainerInvite(trainerId, generateUniqueCode(), newExpiry())));
+        } catch (DataIntegrityViolationException e) {
+            return inviteRepository.findByTrainerId(trainerId).orElseThrow(() -> e);
+        }
     }
 
     @Transactional

@@ -33,6 +33,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -61,6 +62,7 @@ class TrainerRosterServiceTest {
     @Mock private WeeklyCheckInService checkInService;
     @Mock private ProfileService profileService;
     @Mock private TrainerMessageService messageService;
+    @Mock private PlatformTransactionManager transactionManager;
 
     @InjectMocks
     private TrainerRosterService service;
@@ -76,7 +78,7 @@ class TrainerRosterServiceTest {
     void getOrCreateInviteCode_createsNewCodeWhenNoneExists() {
         when(inviteRepository.findByTrainerId(TRAINER_ID)).thenReturn(Optional.empty());
         when(inviteRepository.existsByCode(any())).thenReturn(false);
-        when(inviteRepository.save(any(TrainerInvite.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(inviteRepository.saveAndFlush(any(TrainerInvite.class))).thenAnswer(inv -> inv.getArgument(0));
 
         TrainerInviteDto result = service.getOrCreateInviteCode(TRAINER);
 

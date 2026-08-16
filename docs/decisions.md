@@ -1001,3 +1001,50 @@ messaging is unreachable from the client side without it.
 All four `product_roadmap` items are now closed: controller test coverage,
 exercise-swap persistence, trainer profile editing, and trainer-client
 messaging.
+
+## End-to-end UI test suite (Playwright) + a real concurrency bug it found
+
+The user asked for an agent that continuously exercises the running app —
+real clicks and typing, not mocks — while developing. Landed as two separate
+pieces on purpose: Claude writes/maintains the Playwright spec files, but the
+actual repeated/continuous test *execution* is a plain file watcher
+(`chokidar-cli` calling `npx playwright test`, see `frontend/e2e/README.md`)
+that runs entirely outside any Claude session — re-invoking Claude on every
+file save would burn usage for zero benefit over a local process watching the
+filesystem.
+
+- **`frontend/e2e/`** — 53 specs across 14 files, one per feature area (auth,
+  onboarding, plan-selection, today, workout-session, check-in, measurements,
+  progress, coach, link-trainer, trainer-roster, trainer-client-management,
+  messaging, route-guards). `support/api.ts` hits the backend directly for
+  test setup (register/onboard/select-plan/etc.) so specs jump straight to
+  the screen under test; `support/session.ts` seeds the `fc_*` cookies
+  `lib/session.ts` already defines, to skip UI login where it isn't the thing
+  being tested. Deliberately does **not** re-test what's already covered at
+  the unit/slice level (BF% formulas, plan-generation rules, adherence math)
+  — focuses on multi-step UI flows, cross-page navigation, middleware
+  redirects, and the trainer↔client round trip through two real browser
+  contexts.
+- **Found a genuine backend race condition, not a test bug**: `GET
+  /api/trainer/invite-code` (`TrainerRosterService.getOrCreateInviteCode`)
+  read-then-inserted without any concurrency guard. Two concurrent first-time
+  requests for the same trainer (React StrictMode's double-effect in dev is
+  enough to trigger it, but so would a real double-click or a client retry)
+  both see "no invite yet" and both try to insert one, tripping
+  `uq_trainer_invites_trainer`. Postgres aborts the *whole* transaction on a
+  constraint violation, so simply catching the exception and re-reading
+  in-place doesn't work — the connection is already poisoned. Fixed by
+  running the create attempt in its own `PROPAGATION_REQUIRES_NEW` transaction
+  (`TransactionTemplate`, not `@Transactional` self-invocation, which
+  self-injection issues would silently no-op): if it loses the race, only
+  that inner transaction rolls back, and the caller's still-healthy outer
+  transaction just reads the row the winner created.
+- Verified by booting the real stack (Docker Postgres, `mvn spring-boot:run`,
+  `npm run dev`) and running the suite against it — not against mocks. First
+  run surfaced the race condition above plus a handful of ordinary selector
+  bugs (Next.js's route announcer also carries `role="alert"`, substring text
+  matches colliding with surrounding copy, an `aria-label` shared between a
+  header back-button and a completion-overlay CTA); all fixed. 240 backend
+  tests still pass (added a `PlatformTransactionManager` mock to
+  `TrainerRosterServiceTest` for the new constructor dependency); 53/53 E2E
+  specs pass end-to-end.
