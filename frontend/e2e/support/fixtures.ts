@@ -1,5 +1,5 @@
 import { test as base, expect, type Page } from "@playwright/test";
-import { buildReadyClient, buildTrainer, uniqueEmail } from "./api";
+import { buildReadyClient, buildReadyTrainer, buildTrainer, uniqueEmail } from "./api";
 import { seedSession } from "./session";
 
 /**
@@ -23,6 +23,7 @@ interface Persona {
 export const test = base.extend<{
   readyClient: Persona;
   trainerAccount: Persona;
+  readyTrainer: Persona;
   freshCreds: { email: string; password: string; displayName: string };
 }>({
   // A client that is registered, onboarded, and has a plan selected — for tests
@@ -32,9 +33,18 @@ export const test = base.extend<{
     await use(persona);
   },
 
-  // A trainer account with no clients yet.
+  // A trainer account with no clients yet, and no self-tracking set up either
+  // (panel-only, the default).
   trainerAccount: async ({ request }, use) => {
     const persona = await buildTrainer(request);
+    await use(persona);
+  },
+
+  // A trainer who has also onboarded and selected their own plan — self-
+  // tracking ("Kendi Programım"), for tests exercising screens beyond
+  // onboarding/plan-selection themselves.
+  readyTrainer: async ({ request }, use) => {
+    const persona = await buildReadyTrainer(request);
     await use(persona);
   },
 

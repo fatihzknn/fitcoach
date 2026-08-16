@@ -2,19 +2,31 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronRight, Link2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { api, ApiError, type TrainerConnectionSummaryDto } from "@/lib/api";
+import { session } from "@/lib/session";
 import { useI18n } from "@/lib/i18n";
 
 export default function MessagesPage() {
   const { t } = useI18n();
+  const router = useRouter();
   const [trainers, setTrainers] = React.useState<TrainerConnectionSummaryDto[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
+  // A trainer has no "my trainers" of their own — the API rejects this with
+  // 403. Bounce straight to /today rather than surface a broken/confusing page.
   React.useEffect(() => {
+    if (session.isTrainer()) {
+      router.replace("/today");
+    }
+  }, [router]);
+
+  React.useEffect(() => {
+    if (session.isTrainer()) return;
     api.getMyTrainers()
       .then(setTrainers)
       .catch((err: unknown) => {

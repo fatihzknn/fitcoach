@@ -446,4 +446,8 @@ export const tr: Record<string, string> = {
   "Could not load your trainers.": "Antrenörlerin yüklenemedi.",
   "You're not linked to a trainer yet. Link one to start messaging.":
     "Henüz bir antrenöre bağlı değilsin. Mesajlaşmaya başlamak için birini bağla.",
+
+  // ─── Trainer self-tracking ("Kendi Programım") ─────────────────────────────
+  "My Program": "Kendi Programım",
+  "Trainer panel": "Antrenör paneli",
 };

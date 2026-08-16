@@ -40,6 +40,8 @@ class ProfileServiceTest {
 
     private static final UUID USER_ID = UUID.randomUUID();
     private static final CurrentUser CURRENT_USER = new CurrentUser(USER_ID, "test@example.com", Role.USER);
+    private static final UUID TRAINER_ID = UUID.randomUUID();
+    private static final CurrentUser CURRENT_TRAINER = new CurrentUser(TRAINER_ID, "trainer@example.com", Role.TRAINER);
 
     private OnboardingRequest request(Set<PainArea> painAreas) {
         return new OnboardingRequest(
@@ -129,5 +131,33 @@ class ProfileServiceTest {
 
         assertThatThrownBy(() -> service.getProfile(CURRENT_USER))
                 .isInstanceOf(NotFoundException.class);
+    }
+
+    // ─── a TRAINER can also onboard and track their own training ───────────────
+    // Regression guard: nothing here inspects CurrentUser.role(), and it should
+    // stay that way — a trainer's own "Kendi Programım" self-tracking reuses
+    // this exact same service, unmodified.
+
+    @Test
+    void completeOnboarding_succeedsForTrainerRoleCaller() {
+        when(profileRepository.findByUserId(TRAINER_ID)).thenReturn(Optional.empty());
+
+        FitnessProfileDto result = service.completeOnboarding(CURRENT_TRAINER, request(Set.of(PainArea.NONE)));
+
+        assertThat(result.onboardingCompleted()).isTrue();
+        ArgumentCaptor<FitnessProfile> captor = ArgumentCaptor.forClass(FitnessProfile.class);
+        verify(profileRepository).save(captor.capture());
+        assertThat(captor.getValue().getUserId()).isEqualTo(TRAINER_ID);
+    }
+
+    @Test
+    void getProfile_succeedsForTrainerRoleCaller() {
+        FitnessProfile profile = new FitnessProfile(TRAINER_ID);
+        profile.setMainGoal(MainGoal.STRENGTH);
+        when(profileRepository.findByUserId(TRAINER_ID)).thenReturn(Optional.of(profile));
+
+        FitnessProfileDto result = service.getProfile(CURRENT_TRAINER);
+
+        assertThat(result.mainGoal()).isEqualTo(MainGoal.STRENGTH);
     }
 }

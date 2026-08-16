@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarDays, LineChart, MessageSquareText, MessagesSquare, LogOut, Link2 } from "lucide-react";
+import { CalendarDays, LineChart, MessageSquareText, MessagesSquare, LogOut, Link2, Users } from "lucide-react";
 import { Wordmark } from "@/components/wordmark";
 import { session } from "@/lib/session";
 import { useI18n, LangToggle } from "@/lib/i18n";
@@ -27,6 +27,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useI18n();
+  const isTrainer = session.isTrainer();
+  const nav = isTrainer ? NAV.filter((item) => item.href !== "/messages") : NAV;
 
   function handleSignOut() {
     session.signOut();
@@ -39,13 +41,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Wordmark />
         <div className="flex items-center gap-2">
         <LangToggle />
-        <Link
-          href="/link-trainer"
-          className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
-          aria-label={t("Link a trainer")}
-        >
-          <Link2 className="h-5 w-5" />
-        </Link>
+        {isTrainer ? (
+          <Link
+            href="/trainer"
+            className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
+            aria-label={t("Trainer panel")}
+          >
+            <Users className="h-5 w-5" />
+          </Link>
+        ) : (
+          <Link
+            href="/link-trainer"
+            className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
+            aria-label={t("Link a trainer")}
+          >
+            <Link2 className="h-5 w-5" />
+          </Link>
+        )}
         <button
           onClick={handleSignOut}
           className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
@@ -60,7 +72,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <nav className="fixed inset-x-0 bottom-0 z-10 mx-auto max-w-md border-t border-border bg-background/90 backdrop-blur">
         <ul className="flex items-stretch">
-          {NAV.map(({ href, label, icon: Icon }) => {
+          {nav.map(({ href, label, icon: Icon }) => {
             const active = pathname.startsWith(href);
             return (
               <li key={href} className="flex-1">

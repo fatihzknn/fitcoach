@@ -34,8 +34,9 @@ export default function LoginPage() {
       const res = await api.login({ email: email.trim(), password });
       session.start(res.token, res.onboardingCompleted, res.user.role);
 
-      // Trainer accounts are panel-only — they never have a FitnessProfile,
-      // so onboarding/plan checks below don't apply to them at all.
+      // A trainer's default landing is always the panel, regardless of their
+      // own onboarding progress — self-tracking (if any) is resumed via the
+      // panel's "My Program" entry point, never automatically on login.
       if (res.user.role === "TRAINER") {
         router.replace("/trainer");
         return;

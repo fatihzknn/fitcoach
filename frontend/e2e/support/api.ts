@@ -127,20 +127,23 @@ export async function redeemInviteCode(request: APIRequestContext, token: string
 }
 
 /**
- * Registers a client, completes onboarding, and selects the recommended plan
- * from the first available trainer philosophy — the fastest path to a
+ * Registers an account, completes onboarding, and selects the recommended
+ * plan from the first available trainer philosophy — the fastest path to a
  * fully set-up account for tests that aren't exercising onboarding/plan-selection
- * themselves.
+ * themselves. Shared by both `buildReadyClient` and `buildReadyTrainer`: a
+ * TRAINER account can complete onboarding/plan-selection exactly like a USER
+ * when self-tracking ("Kendi Programım").
  */
-export async function buildReadyClient(
+async function buildReadyAccount(
   request: APIRequestContext,
+  isTrainer: boolean,
   overrides: Partial<{ email: string; password: string; displayName: string; onboarding: OnboardingPayload }> = {},
 ): Promise<{ token: string; email: string; password: string; displayName: string; userId: string }> {
-  const email = overrides.email ?? uniqueEmail("client");
+  const email = overrides.email ?? uniqueEmail(isTrainer ? "trainer" : "client");
   const password = overrides.password ?? "password123";
-  const displayName = overrides.displayName ?? "E2E Client";
+  const displayName = overrides.displayName ?? (isTrainer ? "E2E Ready Trainer" : "E2E Client");
 
-  const auth = await registerUser(request, { email, password, displayName, isTrainer: false });
+  const auth = await registerUser(request, { email, password, displayName, isTrainer });
   await completeOnboarding(request, auth.token, overrides.onboarding);
   const trainers = await getTrainers(request, auth.token);
   const firstTrainer = trainers[0];
@@ -148,6 +151,21 @@ export async function buildReadyClient(
   await selectPlan(request, auth.token, { option: "RECOMMENDED", trainerId: firstTrainer.id });
 
   return { token: auth.token, email, password, displayName, userId: auth.user.id };
+}
+
+export async function buildReadyClient(
+  request: APIRequestContext,
+  overrides: Partial<{ email: string; password: string; displayName: string; onboarding: OnboardingPayload }> = {},
+): Promise<{ token: string; email: string; password: string; displayName: string; userId: string }> {
+  return buildReadyAccount(request, false, overrides);
+}
+
+/** A trainer who has also self-onboarded and selected their own plan ("Kendi Programım"). */
+export async function buildReadyTrainer(
+  request: APIRequestContext,
+  overrides: Partial<{ email: string; password: string; displayName: string; onboarding: OnboardingPayload }> = {},
+): Promise<{ token: string; email: string; password: string; displayName: string; userId: string }> {
+  return buildReadyAccount(request, true, overrides);
 }
 
 export async function submitCheckIn(

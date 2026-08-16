@@ -10,8 +10,11 @@ import { AUTH_COOKIE, ONBOARDED_COOKIE, PLAN_COOKIE, ROLE_COOKIE } from "@/lib/s
  *   - /onboarding requires signed-in.
  *   - /link-trainer requires signed-in only — connecting to a trainer doesn't
  *     depend on onboarding progress.
- *   - TRAINER accounts are panel-only: any client route redirects to /trainer,
- *     and a USER account visiting /trainer is bounced back to their own home.
+ *   - A TRAINER's default home is always /trainer, and a USER can never reach
+ *     /trainer at all. But a TRAINER *can* reach the client screens if they
+ *     navigate there explicitly (the panel's "My Program" entry point) — self-
+ *     tracking is opt-in, gated by the same onboarding/plan-state checks as
+ *     any USER, never automatic.
  *   - / routes to the right place based on session state.
  *   - /login or /register while fully set up sends you to your home (/trainer
  *     or /today, depending on role).
@@ -20,18 +23,6 @@ import { AUTH_COOKIE, ONBOARDED_COOKIE, PLAN_COOKIE, ROLE_COOKIE } from "@/lib/s
  * matches the backend JWT's own graceful default for tokens minted before
  * roles existed.
  */
-
-const CLIENT_ROUTES = [
-  "/today",
-  "/onboarding",
-  "/plan-selection",
-  "/workout",
-  "/progress",
-  "/check-in",
-  "/coach",
-  "/measurements",
-  "/messages",
-];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -52,11 +43,6 @@ export function middleware(req: NextRequest) {
 
   if (pathname === "/") {
     return redirect(resolveHome());
-  }
-
-  // Trainer accounts never use the client flows.
-  if (isAuthed && isTrainer && CLIENT_ROUTES.some((p) => pathname.startsWith(p))) {
-    return redirect("/trainer");
   }
 
   // Client accounts never use the trainer panel.

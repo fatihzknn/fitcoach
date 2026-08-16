@@ -1048,3 +1048,73 @@ filesystem.
   tests still pass (added a `PlatformTransactionManager` mock to
   `TrainerRosterServiceTest` for the new constructor dependency); 53/53 E2E
   specs pass end-to-end.
+
+## Trainer self-tracking — "Kendi Programım" (My Program)
+
+User feedback (2026-08-16) reported the trainer↔client connection flow as
+broken. Investigation (fresh local stack, full 53-spec E2E run) found it
+actually worked — the real cause was that recent fixes/features simply hadn't
+been pushed to `origin/main`, so Railway/Vercel were running stale code.
+Pushed everything current. Separately, the same feedback asked for a trainer
+to optionally track their own training from inside the panel.
+
+- **The backend needed zero functional changes.** A sweep of every
+  `Role`-branching point in the app found `AuthService`, `ProfileService`,
+  `WorkoutPlanService`, and `WorkoutSessionService` never inspect
+  `CurrentUser.role()` anywhere, and `FitnessProfile`/`WorkoutPlan`/
+  `WorkoutSession` are all keyed by a plain `userId` column with no role
+  constraint — a TRAINER could always complete onboarding and get a plan, the
+  onboarding/plan-service layer just never rejected it. The only three
+  `Role.TRAINER` checks in the whole backend are in `TrainerRosterService`,
+  all about the **roster relationship** (`redeemInviteCode`, `requireTrainerRole`,
+  `requireClientRole`) — a trainer still can never link to another trainer or
+  have their own coach, which is intentional and unrelated to self-tracking.
+  Only `Role.java`'s javadoc was updated (it said TRAINER "never does personal
+  onboarding/plan/workout flows," which was about to become false) plus two
+  cheap regression-guard tests in `ProfileServiceTest` proving a TRAINER caller
+  can onboard — insurance against a future "helpful" role check regressing this.
+- **Every actual block was in the frontend.** `middleware.ts` unconditionally
+  bounced any authed TRAINER away from every client route
+  (`/today`, `/onboarding`, `/workout`, etc.) before the normal
+  onboarding/plan-state gate ever ran. Deleted that block (and the now-unused
+  `CLIENT_ROUTES` array) — the existing gate logic is already role-agnostic, so
+  it now naturally handles a self-onboarding trainer exactly like a USER, no
+  new redirect logic needed. `resolveHome()` stays unchanged: a trainer's
+  *default* landing is still always `/trainer`; self-tracking is opt-in,
+  reached only through a new "My Program" link in the panel header
+  (`trainer-shell.tsx`, using `Dumbbell` from `lucide-react`, pointing at
+  `/today` — middleware handles routing into `/onboarding` or
+  `/plan-selection` first if needed, same as any client).
+- **`app-shell.tsx` became role-aware** (it had none before): the bottom nav's
+  "Messages" tab is hidden for a self-tracking trainer (their messaging
+  endpoints are explicitly blocked server-side — a trainer can't have "my
+  trainers" of their own), and the header's "Link a trainer" icon is swapped
+  for a "Trainer panel" icon back to `/trainer` (a trainer can never redeem an
+  invite code either, for the same reason).
+- **Real gap a validation pass caught before shipping**: hiding the Messages
+  nav tab only removes the *link* — `/messages` and `/messages/[trainerId]`
+  were still middleware-reachable by URL for a self-tracking trainer, and
+  both pages would call APIs that 403 for a TRAINER caller. Neither page
+  handled that gracefully (a stuck error banner on one, a silently-empty
+  thread on the other, since `MessageThread`'s poll swallows fetch errors).
+  Fixed by having both pages check `session.isTrainer()` on mount and redirect
+  to `/today` immediately, rather than relying on nav-hiding alone.
+- **One existing E2E test directly encoded the old behavior and had to
+  change**: `route-guards.spec.ts`'s "a trainer visiting a client route is
+  bounced to /trainer" now asserts `/today` → `/onboarding` instead, matching
+  the not-yet-onboarded pattern used elsewhere in the same file. Added a
+  `buildReadyTrainer` E2E fixture (factored `buildReadyClient`'s body into a
+  shared `buildReadyAccount(request, isTrainer, overrides)` helper rather than
+  duplicating the onboard-then-select-plan sequence) and a new
+  `trainer-self-tracking.spec.ts` covering the entry point, the hidden
+  Messages tab, the "Trainer panel" return link, the `/messages` redirect
+  gap-fix, and confirming a plain panel-only trainer's dashboard is
+  completely unaffected.
+- Verified against the real local stack: 242 backend tests (+2), `tsc`/
+  `next lint`/11 Vitest tests clean, and the full Playwright suite —
+  **59/59 E2E specs pass**, including all 6 new trainer-self-tracking specs
+  and the updated route-guard test — which covers every scenario a manual
+  click-through would have (register a trainer → land on `/trainer` with no
+  onboarding prompt → "My Program" → onboarding → plan → `/today` → back to
+  panel → roster unaffected → Messages tab absent), so no separate manual
+  pass was needed on top of it.

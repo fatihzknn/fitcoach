@@ -2,10 +2,10 @@ import { test, expect } from "./support/fixtures";
 import { seedSession } from "./support/session";
 import { registerUser, uniqueEmail } from "./support/api";
 
-test("a trainer visiting a client route is bounced to /trainer", async ({ page, context, trainerAccount }) => {
+test("a trainer visiting /today with no profile yet is sent to /onboarding", async ({ page, context, trainerAccount }) => {
   await seedSession(context, { token: trainerAccount.token, role: "TRAINER" });
   await page.goto("/today");
-  await expect(page).toHaveURL(/\/trainer$/);
+  await expect(page).toHaveURL(/\/onboarding/);
 });
 
 test("a fully set-up client visiting /trainer is bounced to /today", async ({ page, context, readyClient }) => {

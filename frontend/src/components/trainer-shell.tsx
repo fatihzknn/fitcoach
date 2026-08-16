@@ -1,18 +1,22 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { Dumbbell, LogOut } from "lucide-react";
 import { Wordmark } from "@/components/wordmark";
 import { session } from "@/lib/session";
-import { LangToggle } from "@/lib/i18n";
+import { LangToggle, useI18n } from "@/lib/i18n";
 
 /**
- * Trainer panel frame: top bar + sign-out, no bottom nav. A trainer account
- * is panel-only (no Today/Progress/Coach tabs — those are client concepts).
+ * Trainer panel frame: top bar with a "My Program" link (self-tracking is
+ * opt-in, reached via /today) + sign-out. No bottom nav — the panel itself
+ * stays single-purpose; self-tracking, if used, lives entirely in the
+ * client-facing AppShell, not duplicated here.
  */
 export function TrainerShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const { t } = useI18n();
 
   function handleSignOut() {
     session.signOut();
@@ -24,6 +28,13 @@ export function TrainerShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur">
         <Wordmark />
         <div className="flex items-center gap-2">
+          <Link
+            href="/today"
+            className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
+            aria-label={t("My Program")}
+          >
+            <Dumbbell className="h-5 w-5" />
+          </Link>
           <LangToggle />
           <button
             onClick={handleSignOut}
