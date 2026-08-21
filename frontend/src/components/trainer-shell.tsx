@@ -30,6 +30,17 @@ export function TrainerShell({ children }: { children: React.ReactNode }) {
         <div className="flex items-center gap-2">
           <Link
             href="/today"
+            // Prefetching this link (fired as soon as the panel renders,
+            // before self-tracking onboarding has necessarily happened)
+            // caches middleware's redirect decision for /today in Next's
+            // router cache — e.g. "not onboarded yet -> /onboarding". A
+            // trainer who then finishes onboarding+plan-selection and gets
+            // client-navigated to /today lands back on that stale cached
+            // redirect instead of the fresh, now-correct one. Unlike every
+            // other in-app link, this one points at a route whose guard
+            // depends on state that's expected to change mid-session, so
+            // prefetching it is actively wrong.
+            prefetch={false}
             className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
             aria-label={t("My Program")}
           >

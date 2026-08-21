@@ -227,8 +227,10 @@ export default function ProgressPage() {
     <AppShell>
       <section className="animate-fade-up space-y-6">
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
+        {/* Header — wraps to its own row on narrow phones: the big title plus
+            both action buttons don't reliably fit on one line at the app's
+            390px mobile-first baseline width. */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.18em] text-muted-foreground">{t("Your")}</p>
             <h1 className="font-display text-4xl font-extrabold leading-tight tracking-tight">{t("Progress")}</h1>

@@ -1118,3 +1118,61 @@ to optionally track their own training from inside the panel.
   onboarding prompt → "My Program" → onboarding → plan → `/today` → back to
   panel → roster unaffected → Messages tab absent), so no separate manual
   pass was needed on top of it.
+
+## A real human-like pass (both roles) found three bugs the assertion suite missed
+
+That last claim — "no separate manual pass was needed" — turned out to be
+wrong, and re-testing it is *why* this session exists. The user asked for
+exactly what the previous entry waved off: drive the running app as a real
+trainer and a real client, clicking and typing through every feature, the
+way a person actually would. The reason it mattered: every trainer-self-
+tracking E2E test uses `seedSession()` to inject `fc_onboarded`/`fc_plan`
+cookies directly rather than earning them through the real UI flow — so none
+of them ever exercised a cold trainer clicking "My Program" and *actually*
+finishing onboarding + plan-selection for the first time. A scripted,
+Playwright-driven walkthrough (two personas, real clicks/typing, screenshots
+at every screen, console/network diagnostics wired up) found what that gap
+was hiding:
+
+- **Real bug — client router cache serves a stale middleware redirect.**
+  A trainer clicking "My Program" prefetches `/today` immediately (before
+  they're onboarded), caching middleware's `/today → /onboarding` redirect.
+  After they finish onboarding + plan-selection, `router.replace("/today")`
+  resolved that *cached* redirect instead of re-running middleware against
+  the now-valid cookies — landing them back on `/onboarding` in a loop,
+  despite `fc_onboarded`/`fc_plan` both being set correctly. `prefetch={false}`
+  on the Link and `router.refresh()` before the replace both failed to fix
+  it (confirmed empirically, not assumed) — `router.refresh()` only
+  revalidates the *current* route, not other cached entries, and Next's
+  automatic redirect-prefetch behavior for this Link persisted regardless of
+  the `prefetch` prop. The only navigation proven (via direct `page.goto`
+  comparison) to always hit the server fresh was a hard one, so the five
+  cookie-mutating transitions in `login`, `register`, `onboarding`, and
+  `plan-selection` now use `window.location.assign(...)` instead of
+  `router.replace(...)`. Added a *real* UI-driven regression test
+  (`trainer-self-tracking.spec.ts`, no `seedSession()` shortcut) that would
+  have caught this.
+- **Real bug — hydration crash for every self-tracking trainer.** `AppShell`
+  read `session.isTrainer()` (a `document.cookie` read) directly during
+  render to pick the header icon and filter the bottom nav. SSR has no
+  cookie access, always guesses non-trainer, then the client re-renders as
+  trainer — a hydration mismatch on every single `AppShell` page load for a
+  self-tracking trainer, serious enough that React discarded the whole SSR'd
+  tree and re-rendered client-side from scratch each time (visible in the
+  console as "the entire root will switch to client rendering"). Fixed with
+  the standard pattern: default state matches the SSR guess, corrected in a
+  post-mount `useEffect`.
+- **Real bug — clipped "Check in" button.** `/progress`'s header (title +
+  two action buttons) used a non-wrapping flex row; at the app's own
+  390px mobile-first baseline, the two buttons don't fit next to the large
+  title and the second one renders partially off-screen — unusable, not
+  just visually off. Only surfaced by actually looking at a screenshot,
+  which is the part of "test like a human" that assertions can't do.
+  Fixed with `flex-wrap`, verified the button's bounding box now sits fully
+  inside the viewport.
+
+All three fixes verified against the full 60-spec E2E suite (still 60/60)
+and 242 backend tests, plus a second full walkthrough confirming the
+hydration errors and redirect loop are gone (a handful of benign
+`net::ERR_ABORTED` on superseded RSC prefetches remain — expected side
+effect of switching to hard navigations, not a bug).

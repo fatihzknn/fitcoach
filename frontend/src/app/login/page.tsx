@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Wordmark } from "@/components/wordmark";
 import { BackendStatus } from "@/components/backend-status";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,6 @@ import { session } from "@/lib/session";
 import { useI18n, LangToggle } from "@/lib/i18n";
 
 export default function LoginPage() {
-  const router = useRouter();
   const { t } = useI18n();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -34,16 +32,22 @@ export default function LoginPage() {
       const res = await api.login({ email: email.trim(), password });
       session.start(res.token, res.onboardingCompleted, res.user.role);
 
+      // Hard navigations (not router.replace()) below — see the matching
+      // comment in plan-selection/page.tsx. Next's client router cache keys
+      // purely by URL and can't know these cookies just changed, so a
+      // client-side transition risks resolving a stale redirect cached
+      // earlier in the browser (e.g. a previous, differently-authed session).
+
       // A trainer's default landing is always the panel, regardless of their
       // own onboarding progress — self-tracking (if any) is resumed via the
       // panel's "My Program" entry point, never automatically on login.
       if (res.user.role === "TRAINER") {
-        router.replace("/trainer");
+        window.location.assign("/trainer");
         return;
       }
 
       if (!res.onboardingCompleted) {
-        router.replace("/onboarding");
+        window.location.assign("/onboarding");
         return;
       }
 
@@ -51,9 +55,9 @@ export default function LoginPage() {
       try {
         await api.getActivePlan();
         session.setPlanSelected();
-        router.replace("/today");
+        window.location.assign("/today");
       } catch {
-        router.replace("/plan-selection");
+        window.location.assign("/plan-selection");
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("Something went wrong. Try again."));

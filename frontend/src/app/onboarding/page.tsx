@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Wordmark } from "@/components/wordmark";
 import { Button } from "@/components/ui/button";
@@ -48,7 +47,6 @@ interface Draft {
 }
 
 export default function OnboardingPage() {
-  const router = useRouter();
   const { t } = useI18n();
   const [step, setStep] = React.useState(0);
   const [draft, setDraft] = React.useState<Draft>({
@@ -124,7 +122,11 @@ export default function OnboardingPage() {
     try {
       await api.completeOnboarding(payload);
       session.setOnboarded();
-      router.replace("/plan-selection");
+      // Hard navigation, not router.replace() — see the matching comment in
+      // plan-selection/page.tsx. A cached prefetch of /plan-selection from
+      // earlier this session (while not yet onboarded) would otherwise win
+      // over the fresh fc_onboarded cookie via Next's client router cache.
+      window.location.assign("/plan-selection");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("Could not save. Please try again."));
       setSubmitting(false);

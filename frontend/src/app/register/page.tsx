@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Wordmark } from "@/components/wordmark";
 import { BackendStatus } from "@/components/backend-status";
 import { Button } from "@/components/ui/button";
@@ -14,7 +13,6 @@ import { useI18n, LangToggle } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export default function RegisterPage() {
-  const router = useRouter();
   const { t } = useI18n();
   const [displayName, setDisplayName] = React.useState("");
   const [email, setEmail] = React.useState("");
@@ -40,7 +38,9 @@ export default function RegisterPage() {
         isTrainer,
       });
       session.start(res.token, res.onboardingCompleted, res.user.role);
-      router.replace(res.user.role === "TRAINER" ? "/trainer" : "/onboarding");
+      // Hard navigation, not router.replace() — see the matching comment in
+      // plan-selection/page.tsx.
+      window.location.assign(res.user.role === "TRAINER" ? "/trainer" : "/onboarding");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("Something went wrong. Try again."));
       setLoading(false);

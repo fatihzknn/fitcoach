@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { Wordmark } from "@/components/wordmark";
 import { TrainerCard, PlanCard, PersonalizingOverlay } from "@/components/plan-picker";
 import {
@@ -19,7 +18,6 @@ import { useI18n } from "@/lib/i18n";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function PlanSelectionPage() {
-  const router = useRouter();
   const { t } = useI18n();
 
   const [trainers, setTrainers] = React.useState<TrainerPhilosophyDto[]>([]);
@@ -83,7 +81,16 @@ export default function PlanSelectionPage() {
     try {
       await api.selectPlan({ option, trainerId: selectedTrainerId ?? undefined });
       session.setPlanSelected();
-      router.replace("/today");
+      // A plain router.replace() here can resolve /today from Next's client
+      // router cache instead of hitting the server: if that path was ever
+      // prefetched earlier this session while unonboarded (e.g. a
+      // self-tracking trainer's "My Program" link on the panel, prefetched
+      // before they'd finished onboarding), the cached response is
+      // middleware's *old* redirect-to-/onboarding — router.refresh() does
+      // not invalidate it, it only revalidates the current route. A hard
+      // navigation is the only way to guarantee middleware re-runs against
+      // the fc_plan cookie we just set.
+      window.location.assign("/today");
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : t("Could not save plan. Please try again."));
       setSubmitting(false);

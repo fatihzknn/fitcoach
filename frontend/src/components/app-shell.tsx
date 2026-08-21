@@ -27,7 +27,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useI18n();
-  const isTrainer = session.isTrainer();
+  // session.isTrainer() reads document.cookie, which doesn't exist during
+  // SSR — starting from the same false default the server used and only
+  // switching after mount keeps the first client render identical to the
+  // server's HTML. Reading the cookie directly in the initial render instead
+  // mismatches for every self-tracking trainer (server always guesses
+  // non-trainer), which forces React to discard the SSR'd tree and hydrate
+  // the whole page over from scratch.
+  const [isTrainer, setIsTrainer] = React.useState(false);
+  React.useEffect(() => {
+    setIsTrainer(session.isTrainer());
+  }, []);
   const nav = isTrainer ? NAV.filter((item) => item.href !== "/messages") : NAV;
 
   function handleSignOut() {
